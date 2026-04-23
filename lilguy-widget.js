@@ -2,13 +2,16 @@
 // Scriptable iOS widget
 // tap → opens takooo66.github.io/lilguy/
 
+// upH/loH match HTML values (out of 74 SVG units = full eye height)
 const STATES = [
-  { r:[0,4],   label:'still up', openRatio:0.15, pupRy:0.55, gray:152, glow:true  },
-  { r:[4,12],  label:'zzz',      openRatio:0.02, pupRy:0.15, gray: 40, glow:false },
-  { r:[12,16], label:'meh',      openRatio:0.40, pupRy:0.32, gray: 88, glow:false },
-  { r:[16,21], label:'warming',  openRatio:0.65, pupRy:0.44, gray:128, glow:false },
-  { r:[21,24], label:'peak',     openRatio:0.90, pupRy:0.58, gray:176, glow:true  },
+  { r:[0,4],   label:'still up', upH:6,  loH:3,  pupRy:26, gray:152, glow:true  },
+  { r:[4,12],  label:'zzz',      upH:68, loH:0,  pupRy:7,  gray: 40, glow:false },
+  { r:[12,16], label:'meh',      upH:36, loH:14, pupRy:16, gray: 88, glow:false },
+  { r:[16,21], label:'warming',  upH:10, loH:4,  pupRy:22, gray:128, glow:false },
+  { r:[21,24], label:'peak',     upH:0,  loH:0,  pupRy:28, gray:176, glow:true  },
 ]
+
+const SVG_H = 74  // HTML eye height reference
 
 function getState() {
   const h = new Date().getHours()
@@ -16,68 +19,88 @@ function getState() {
 }
 
 function grayColor(g, alpha = 1) {
-  const hex = g.toString(16).padStart(2, '0')
+  const hex = Math.round(g).toString(16).padStart(2, '0')
   return new Color(`#${hex}${hex}${hex}`, alpha)
 }
 
 function drawEye(ctx, cx, cy, ew, eh, state) {
-  const { gray, openRatio, pupRy: pupRyRatio, glow } = state
-  const openH = Math.max(eh * openRatio, 1)
-  const pupRx = ew * 0.12
-  const pupRy = Math.min(openH * 0.48, eh * pupRyRatio * 0.5)
+  const upperLidH = (state.upH / SVG_H) * eh
+  const lowerLidH = (state.loH / SVG_H) * eh
+  const openH = Math.max(eh - upperLidH - lowerLidH, 0)
+  const gray = state.gray
 
-  // glow rings
-  if (glow) {
+  // --- glow (behind everything) ---
+  if (state.glow && openH > 2) {
     for (let i = 3; i >= 1; i--) {
-      ctx.setFillColor(grayColor(gray, 0.06 * i))
+      ctx.setFillColor(grayColor(gray, 0.07 * i))
       const gr = new Path()
-      gr.addEllipse(new Rect(cx - ew/2 - i*5, cy - openH/2 - i*5, ew + i*10, openH + i*10))
+      gr.addEllipse(new Rect(cx - ew/2 - i*5, cy - openH/2 - i*4, ew + i*10, openH + i*8))
       ctx.addPath(gr)
       ctx.fillPath()
     }
   }
 
-  // sclera fill
-  const eyeRect = new Rect(cx - ew/2, cy - openH/2, ew, openH)
-  const eyePath = new Path()
-  eyePath.addEllipse(eyeRect)
+  // --- sclera (full ellipse, lids will mask it) ---
+  const scleraPath = new Path()
+  scleraPath.addEllipse(new Rect(cx - ew/2, cy - eh/2, ew, eh))
   ctx.setFillColor(grayColor(gray))
-  ctx.addPath(eyePath)
+  ctx.addPath(scleraPath)
   ctx.fillPath()
 
-  // sclera black stroke
-  ctx.setStrokeColor(Color.black())
-  ctx.setLineWidth(2.5)
-  ctx.addPath(eyePath)
-  ctx.strokePath()
-
-  // iris (amber)
-  if (openRatio > 0.05) {
-    const irisR = Math.min(ew * 0.36, openH * 0.46)
+  // --- iris (amber, centered at cy — lids mask the overflow) ---
+  if (openH > 3) {
+    const irisR = Math.min(ew * 0.33, openH * 0.52)
     const irisPath = new Path()
     irisPath.addEllipse(new Rect(cx - irisR, cy - irisR, irisR*2, irisR*2))
     ctx.setFillColor(new Color('#c4892a'))
     ctx.addPath(irisPath)
     ctx.fillPath()
+
+    // pupil (vertical ellipse, scales with pupRy/28)
+    const pupRyScaled = (state.pupRy / 28) * irisR * 0.95
+    const pupRx = ew * 0.085
+    const pupRy = Math.min(pupRyScaled, openH * 0.46)
+
+    if (pupRy > 0.5) {
+      const pupPath = new Path()
+      pupPath.addEllipse(new Rect(cx - pupRx, cy - pupRy, pupRx*2, pupRy*2))
+      ctx.setFillColor(new Color('#060606'))
+      ctx.addPath(pupPath)
+      ctx.fillPath()
+
+      // highlight
+      const hx = pupRx * 0.38, hy = pupRy * 0.28
+      const hiPath = new Path()
+      hiPath.addEllipse(new Rect(cx - pupRx*0.3 - hx/2, cy - pupRy*0.6 - hy/2, hx, hy))
+      ctx.setFillColor(new Color('#ffffff', 0.55))
+      ctx.addPath(hiPath)
+      ctx.fillPath()
+    }
   }
 
-  // pupil
-  const pupPath = new Path()
-  pupPath.addEllipse(new Rect(cx - pupRx, cy - pupRy, pupRx*2, pupRy*2))
-  ctx.setFillColor(new Color('#060606'))
-  ctx.addPath(pupPath)
-  ctx.fillPath()
-
-  // highlight
-  if (openRatio > 0.1) {
-    const hx = pupRx * 0.35
-    const hy = pupRy * 0.3
-    const hiPath = new Path()
-    hiPath.addEllipse(new Rect(cx - pupRx*0.3 - hx/2, cy - pupRy*0.55 - hy/2, hx, hy))
-    ctx.setFillColor(new Color('#ffffff', 0.55))
-    ctx.addPath(hiPath)
+  // --- upper lid (black rect from top, masks iris/pupil) ---
+  if (upperLidH > 0) {
+    const uLidPath = new Path()
+    uLidPath.addRect(new Rect(cx - ew/2 - 2, cy - eh/2 - 1, ew + 4, upperLidH + 1))
+    ctx.setFillColor(Color.black())
+    ctx.addPath(uLidPath)
     ctx.fillPath()
   }
+
+  // --- lower lid ---
+  if (lowerLidH > 0) {
+    const lLidPath = new Path()
+    lLidPath.addRect(new Rect(cx - ew/2 - 2, cy + eh/2 - lowerLidH, ew + 4, lowerLidH + 1))
+    ctx.setFillColor(Color.black())
+    ctx.addPath(lLidPath)
+    ctx.fillPath()
+  }
+
+  // --- sclera black stroke (on top of lids) ---
+  ctx.setStrokeColor(Color.black())
+  ctx.setLineWidth(2.5)
+  ctx.addPath(scleraPath)
+  ctx.strokePath()
 }
 
 async function createWidget() {
@@ -94,8 +117,8 @@ async function createWidget() {
   ctx.opaque = false
   ctx.respectScreenScale = true
 
-  const eyeW = 54, eyeH = 38
-  const gap = 20
+  const eyeW = 56, eyeH = 36
+  const gap = 18
   const lx = cw/2 - gap/2 - eyeW/2
   const rx = cw/2 + gap/2 + eyeW/2
   const ey = ch/2
