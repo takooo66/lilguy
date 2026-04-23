@@ -170,6 +170,28 @@ var dPupRx=10, tPupRx=10;
 // Gaze: independent L/R for two-finger cross-eye mode
 var dGazeXL=0, dGazeYL=0, tGazeXL=0, tGazeYL=0;
 var dGazeXR=0, dGazeYR=0, tGazeXR=0, tGazeYR=0;
+// Gyro base gaze
+var gyroX=0, gyroY=0, gyroReady=false;
+
+function setupGyro() {
+  if (gyroReady) return;
+  if (typeof DeviceOrientationEvent !== 'undefined' &&
+      typeof DeviceOrientationEvent.requestPermission === 'function') {
+    DeviceOrientationEvent.requestPermission().then(function(s) {
+      if (s === 'granted') startGyro();
+    }).catch(function(){});
+  } else {
+    startGyro();
+  }
+}
+
+function startGyro() {
+  gyroReady = true;
+  window.addEventListener('deviceorientation', function(e) {
+    gyroX = Math.max(-15, Math.min(15, (e.gamma || 0) * 0.75));
+    gyroY = Math.max(-7,  Math.min(7,  ((e.beta  || 90) - 90) * 0.35));
+  });
+}
 // State flags
 var isWinkingL=false, isWinkingR=false;
 var isSurprised=false, isLongPressing=false, isTouching=false;
@@ -258,7 +280,7 @@ function doTapLook(tx, ty) {
   setTimeout(function() {
     blink();
     setTimeout(function() {
-      if (!isTouching) { tGazeXL=0; tGazeYL=0; tGazeXR=0; tGazeYR=0; }
+      if (!isTouching) { tGazeXL=gyroX; tGazeYL=gyroY; tGazeXR=gyroX; tGazeYR=gyroY; }
     }, 600);
   }, 200);
 }
@@ -269,6 +291,7 @@ var touchStartX=0, touchStartY=0, touchStartTime=0;
 
 document.body.addEventListener('touchstart', function(e) {
   e.preventDefault();
+  setupGyro();
   isTouching = true;
   var t = e.changedTouches[0];
   touchStartX = t.clientX; touchStartY = t.clientY;
@@ -337,7 +360,7 @@ document.body.addEventListener('touchend', function(e) {
   if (e.touches.length === 0) {
     isTouching = false;
     setTimeout(function() {
-      if (!isTouching) { tGazeXL=0; tGazeYL=0; tGazeXR=0; tGazeYR=0; }
+      if (!isTouching) { tGazeXL=gyroX; tGazeYL=gyroY; tGazeXR=gyroX; tGazeYR=gyroY; }
     }, 300);
   }
 }, { passive:false });
@@ -348,11 +371,11 @@ function scheduleAutoGaze() {
     if (!isTouching && !isSurprised) {
       var active = currentLife.label==='peak' || currentLife.label==='still up';
       var gx = active ? (Math.random()-0.5)*16 : 0;
-      tGazeXL = gx; tGazeXR = gx;
-      tGazeYL = 0;  tGazeYR = 0;
+      tGazeXL = gyroX + gx; tGazeXR = gyroX + gx;
+      tGazeYL = gyroY;      tGazeYR = gyroY;
     }
     setTimeout(function() {
-      if (!isTouching) { tGazeXL=0; tGazeXR=0; }
+      if (!isTouching) { tGazeXL=gyroX; tGazeXR=gyroX; }
       scheduleAutoGaze();
     }, 1500+Math.random()*2500);
   }, 4000+Math.random()*8000);
