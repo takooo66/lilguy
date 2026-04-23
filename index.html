@@ -220,6 +220,8 @@ document.addEventListener('touchend', function handler() {
 // State flags
 var isWinkingL=false, isWinkingR=false;
 var isSurprised=false, isLongPressing=false, isTouching=false;
+// Idle doze
+var lastInteractTime=Date.now(), dozeExtra=0;
 var eyeWrap=document.getElementById('eyeWrap');
 
 function lerp(a, b, t) { return a + (b-a)*t; }
@@ -231,7 +233,7 @@ function applyLids() {
 }
 
 function applyLife(life) {
-  tUpH   = life.upH;
+  tUpH   = life.upH + dozeExtra;
   tLoH   = life.loH;
   tPupRy = life.pupRy;
   sL.setAttribute('fill', life.fill);
@@ -316,6 +318,17 @@ function scheduleHeadTilt() {
   }, 5000 + Math.random() * 10000);
 }
 
+// ── Idle doze (3min no touch → lids droop) ───────────────────────
+function dozeCheck() {
+  if (isTouching || isSurprised) return;
+  var idle = Date.now() - lastInteractTime;
+  // 3min(180s) start, 10min(600s) max — up to +22 upH
+  dozeExtra = idle > 180000
+    ? Math.min(Math.round((idle - 180000) / 420000 * 22), 22)
+    : 0;
+  tUpH = currentLife.upH + dozeExtra;
+}
+
 // ── Touch → gaze offset (in SVG units) ──────────────────────────
 function touchToGaze(tx, ty) {
   var rect = eyeWrap.getBoundingClientRect();
@@ -372,6 +385,8 @@ var touchStartX=0, touchStartY=0, touchStartTime=0;
 document.body.addEventListener('touchstart', function(e) {
   e.preventDefault();
   isTouching = true;
+  if (dozeExtra > 0) { dozeExtra = 0; tUpH = currentLife.upH; }
+  lastInteractTime = Date.now();
   var t = e.changedTouches[0];
   touchStartX = t.clientX; touchStartY = t.clientY;
   touchStartTime = Date.now();
@@ -568,6 +583,7 @@ scheduleBlink();
 scheduleAutoGaze();
 scheduleHeadTilt();
 scheduleMicroSaccade();
+setInterval(dozeCheck, 10000);
 loop();
 </script>
 </body>
