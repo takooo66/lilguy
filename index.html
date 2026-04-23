@@ -192,6 +192,8 @@ var dGyroX=0, dGyroY=0;
 var mouseGazeX=0, mouseGazeY=0;
 // Cat head tilt
 var dTilt=0, tTilt=0;
+// Post-blink head wobble (independent channel, fast decay)
+var blinkWobble=0, blinkWobbleTarget=0;
 
 function startGyro() {
   gyroReady = true;
@@ -246,7 +248,11 @@ function blink(side) {
     if (isWinkingL || isWinkingR) return;
     isWinkingL = true; isWinkingR = true;
     dUpHL = 74; dUpHR = 74;
-    setTimeout(function() { isWinkingL = false; isWinkingR = false; }, 85);
+    setTimeout(function() {
+      isWinkingL = false; isWinkingR = false;
+      blinkWobbleTarget = (Math.random() - 0.5) * 2.4;
+      setTimeout(function() { blinkWobbleTarget = 0; }, 280);
+    }, 85);
   } else if (side === 'L') {
     if (isWinkingL) return;
     isWinkingL = true; dUpHL = 74;
@@ -291,7 +297,11 @@ function slowBlink() {
         var q = Math.min(1, (performance.now() - t1) / 420);
         dUpHL = dUpHR = 74 * (1 - q);
         if (q < 1) requestAnimationFrame(openStep);
-        else { isWinkingL = false; isWinkingR = false; }
+        else {
+          isWinkingL = false; isWinkingR = false;
+          blinkWobbleTarget = (Math.random() - 0.5) * 1.8;
+          setTimeout(function() { blinkWobbleTarget = 0; }, 400);
+        }
       })();
     }, 130);
   })();
@@ -516,16 +526,18 @@ function loop() {
   iR.setAttribute('cx', 245 + dGazeXR); iR.setAttribute('cy', 70 + dGazeYR);
 
   // Gyro + float + cat lean/tilt
-  dGyroX = lerp(dGyroX, gyroX, 0.03);
-  dTilt  = lerp(dTilt, tTilt, 0.015);
+  dGyroX      = lerp(dGyroX, gyroX, 0.03);
+  dTilt       = lerp(dTilt, tTilt, 0.015);
+  blinkWobble = lerp(blinkWobble, blinkWobbleTarget, 0.09);
   var t = Date.now();
-  var floatY = Math.sin(t / 2800) * 10 + Math.sin(t / 1700) * 4;
-  var lean   = dGyroX * 0.04;
+  var tiltMag = Math.abs(dTilt) / 3.5;
+  var floatY  = (Math.sin(t / 2800) * 10 + Math.sin(t / 1700) * 4) * (1 - tiltMag * 0.6);
+  var lean    = dGyroX * 0.04;
   var breathPeriod = BREATH[currentLife.label] || 4000;
   var breathScale  = 0.992 + breathWave(t, breathPeriod) * 0.016;
   eyeWrap.style.transform =
     'translate(calc(-50% + ' + dGyroX.toFixed(1) + 'px), calc(-50% + ' + floatY.toFixed(1) + 'px))' +
-    ' rotate(' + (lean + dTilt).toFixed(2) + 'deg)' +
+    ' rotate(' + (lean + dTilt + blinkWobble).toFixed(2) + 'deg)' +
     ' scale(' + breathScale.toFixed(4) + ')';
 
   requestAnimationFrame(loop);
