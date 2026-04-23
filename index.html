@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="lil guy">
+<title>lil guy</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&display=swap');
+
+* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+
+body {
+  background:#000;
+  font-family:'DM Mono',monospace;
+  height:100dvh;
+  overflow:hidden;
+  user-select:none;
+}
+
+.c {
+  position:fixed;
+  font-size:9px;
+  letter-spacing:2px;
+  text-transform:uppercase;
+  color:#1a1a1a;
+  z-index:30;
+}
+.tl { top:max(16px,env(safe-area-inset-top));       left:16px; }
+.tr { top:max(16px,env(safe-area-inset-top));       right:16px; text-align:right; }
+.bl { bottom:max(20px,env(safe-area-inset-bottom)); left:16px; }
+.br { bottom:max(20px,env(safe-area-inset-bottom)); right:16px; text-align:right; }
+
+#clock {
+  position:fixed;
+  bottom:max(48px,env(safe-area-inset-bottom));
+  left:0; right:0;
+  text-align:center;
+  font-size:clamp(60px,20vw,110px);
+  letter-spacing:-4px;
+  opacity:0.025;
+  pointer-events:none;
+  color:#fff;
+  z-index:1;
+}
+
+#eyeWrap {
+  position:fixed;
+  top:50%;
+  left:50%;
+  transform:translate(-50%,-50%);
+  z-index:10;
+  width:min(320px,85vw);
+}
+#eyeWrap svg { width:100%; height:auto; display:block; }
+</style>
+</head>
+<body>
+
+<div class="c tl">LIL GUY</div>
+<div class="c tr" id="cTR">—</div>
+<div class="c bl" id="cBL">—</div>
+<div class="c br" id="cBR">—</div>
+<div id="clock">00:00</div>
+
+<!-- Eyes -->
+<div id="eyeWrap">
+<svg viewBox="0 0 320 140" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Soft glow — active during peak / still up -->
+    <filter id="glow" x="-80%" y="-80%" width="260%" height="260%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="5" result="b"/>
+      <feMerge>
+        <feMergeNode in="b"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <!-- Almond clip paths. Eye spans y=28..102 (h=74), center y=70 -->
+    <clipPath id="cL">
+      <path d="M20 70 C35 28,115 28,130 70 C115 102,35 102,20 70Z"/>
+    </clipPath>
+    <clipPath id="cR">
+      <path d="M190 70 C205 28,285 28,300 70 C285 102,205 102,190 70Z"/>
+    </clipPath>
+  </defs>
+
+  <!-- Left eye -->
+  <g id="gL">
+    <path id="sL" d="M20 70 C35 28,115 28,130 70 C115 102,35 102,20 70Z" fill="#d0d0d0"/>
+    <g clip-path="url(#cL)">
+      <ellipse id="pL" cx="75"  cy="70" rx="10" ry="28" fill="#060606"/>
+      <rect    id="uL" x="18"  y="28"  width="114" height="0" fill="#000"/>
+      <rect    id="lL" x="18"  y="102" width="114" height="0" fill="#000"/>
+    </g>
+  </g>
+
+  <!-- Right eye -->
+  <g id="gR">
+    <path id="sR" d="M190 70 C205 28,285 28,300 70 C285 102,205 102,190 70Z" fill="#d0d0d0"/>
+    <g clip-path="url(#cR)">
+      <ellipse id="pR" cx="245" cy="70" rx="10" ry="28" fill="#060606"/>
+      <rect    id="uR" x="188" y="28"  width="114" height="0" fill="#000"/>
+      <rect    id="lR" x="188" y="102" width="114" height="0" fill="#000"/>
+    </g>
+  </g>
+</svg>
+</div>
+
+<!-- Film grain overlay — sits above everything -->
+<svg style="position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:50;"
+     xmlns="http://www.w3.org/2000/svg">
+  <filter id="gf" x="0" y="0" width="100%" height="100%"
+          color-interpolation-filters="sRGB">
+    <feTurbulence type="fractalNoise" baseFrequency="0.68"
+                  numOctaves="4" seed="5" stitchTiles="stitch"/>
+    <feColorMatrix type="saturate" values="0"/>
+  </filter>
+  <rect width="100%" height="100%" filter="url(#gf)" fill="white" opacity="0.055"/>
+</svg>
+
+<script>
+// ── Life states mapped to user's actual schedule ─────────────────
+// Eye geometry: y=28 (top) .. y=102 (bottom), total height=74
+// upH  — upper lid height from y=28 downward  (0=open, 74=closed)
+// loH  — lower lid height from y=102 upward   (0=open)
+// pupRy — pupil vertical radius (28=wide, 7=asleep sliver)
+var LIFE = [
+  { r:[0,4],   label:'still up', upH:6,  loH:3,  pupRy:26, fill:'#c8c8c8', glow:true  },
+  { r:[4,12],  label:'zzz',      upH:68, loH:0,  pupRy:7,  fill:'#383838', glow:false },
+  { r:[12,16], label:'meh',      upH:36, loH:14, pupRy:16, fill:'#7e7e7e', glow:false },
+  { r:[16,21], label:'warming',  upH:10, loH:4,  pupRy:22, fill:'#aaaaaa', glow:false },
+  { r:[21,24], label:'peak',     upH:0,  loH:0,  pupRy:28, fill:'#e4e4e4', glow:true  },
+];
+
+function getLife(h) {
+  for (var i = 0; i < LIFE.length; i++)
+    if (h >= LIFE[i].r[0] && h < LIFE[i].r[1]) return LIFE[i];
+  return LIFE[3];
+}
+
+var currentLife = getLife(new Date().getHours());
+
+// DOM refs
+var sL=document.getElementById('sL'), sR=document.getElementById('sR');
+var pL=document.getElementById('pL'), pR=document.getElementById('pR');
+var uL=document.getElementById('uL'), uR=document.getElementById('uR');
+var lL=document.getElementById('lL'), lR=document.getElementById('lR');
+var gL=document.getElementById('gL'), gR=document.getElementById('gR');
+var cTR=document.getElementById('cTR'), cBR=document.getElementById('cBR');
+var clockEl=document.getElementById('clock');
+
+// ── Animated display values ──────────────────────────────────────
+// Lids: independent L/R for wink support
+var dUpHL=0, dUpHR=0, tUpH=0;
+var dLoH=0, tLoH=0;
+// Pupil: rx for dilation, ry for open/closed state
+var dPupRy=28, tPupRy=28;
+var dPupRx=10, tPupRx=10;
+// Gaze: independent L/R for two-finger cross-eye mode
+var dGazeXL=0, dGazeYL=0, tGazeXL=0, tGazeYL=0;
+var dGazeXR=0, dGazeYR=0, tGazeXR=0, tGazeYR=0;
+// State flags
+var isWinkingL=false, isWinkingR=false;
+var isSurprised=false, isLongPressing=false, isTouching=false;
+var eyeWrap=document.getElementById('eyeWrap');
+
+function lerp(a, b, t) { return a + (b-a)*t; }
+
+function applyLids() {
+  uL.setAttribute('height', dUpHL); uR.setAttribute('height', dUpHR);
+  lL.setAttribute('height', dLoH);  lR.setAttribute('height', dLoH);
+  lL.setAttribute('y', 102-dLoH);   lR.setAttribute('y', 102-dLoH);
+}
+
+function applyLife(life) {
+  tUpH   = life.upH;
+  tLoH   = life.loH;
+  tPupRy = life.pupRy;
+  sL.setAttribute('fill', life.fill);
+  sR.setAttribute('fill', life.fill);
+  var gf = life.glow ? 'url(#glow)' : 'none';
+  gL.setAttribute('filter', gf); gR.setAttribute('filter', gf);
+  cTR.textContent = life.label;
+}
+
+// ── Blink / Wink ─────────────────────────────────────────────────
+// side: undefined=both eyes, 'L'=left only, 'R'=right only
+function blink(side) {
+  if (!side) {
+    if (isWinkingL || isWinkingR) return;
+    isWinkingL = true; isWinkingR = true;
+    dUpHL = 74; dUpHR = 74;
+    setTimeout(function() { isWinkingL = false; isWinkingR = false; }, 85);
+  } else if (side === 'L') {
+    if (isWinkingL) return;
+    isWinkingL = true; dUpHL = 74;
+    setTimeout(function() { isWinkingL = false; }, 85);
+  } else {
+    if (isWinkingR) return;
+    isWinkingR = true; dUpHR = 74;
+    setTimeout(function() { isWinkingR = false; }, 85);
+  }
+}
+
+function scheduleBlink() {
+  var label = currentLife.label;
+  var d = label==='zzz'      ? 18000+Math.random()*22000
+        : label==='peak'     ?   800+Math.random()*1400
+        : label==='still up' ?  2000+Math.random()*3000
+        : label==='meh'      ?  5000+Math.random()*4000
+        :                       3000+Math.random()*3000;
+  setTimeout(function() {
+    blink();
+    if (Math.random() < 0.18) setTimeout(function(){ blink(); }, 230);
+    scheduleBlink();
+  }, d);
+}
+
+// ── Touch → gaze offset (in SVG units) ──────────────────────────
+function touchToGaze(tx, ty) {
+  var rect = eyeWrap.getBoundingClientRect();
+  var cx = rect.left + rect.width  * 0.5;
+  var cy = rect.top  + rect.height * 0.5;
+  var dx = tx - cx, dy = ty - cy;
+  var dist = Math.sqrt(dx*dx + dy*dy) || 1;
+  var maxD = Math.min(window.innerWidth, window.innerHeight) * 0.38;
+  var s = Math.min(dist / maxD, 1);
+  return { x: (dx/dist)*s*15, y: (dy/dist)*s*7 };
+}
+
+// ── Reactions ────────────────────────────────────────────────────
+function doSurprise() {
+  isSurprised = true;
+  dUpHL = 0; dUpHR = 0; tUpH = 0; tLoH = 0; dLoH = 0;
+  tPupRy = 14; tPupRx = 14;  // round & wide — startled
+  setTimeout(function() {
+    isSurprised = false;
+    applyLife(currentLife);
+    tPupRx = 10;
+  }, 900);
+}
+
+function doTapLook(tx, ty) {
+  var g = touchToGaze(tx, ty);
+  tGazeXL = g.x * 1.4; tGazeYL = g.y * 1.4;
+  tGazeXR = g.x * 1.4; tGazeYR = g.y * 1.4;
+  setTimeout(function() {
+    blink();
+    setTimeout(function() {
+      if (!isTouching) { tGazeXL=0; tGazeYL=0; tGazeXR=0; tGazeYR=0; }
+    }, 600);
+  }, 200);
+}
+
+// ── Touch event handlers ─────────────────────────────────────────
+var lastTapTime=0, longPressTimer=null;
+var touchStartX=0, touchStartY=0, touchStartTime=0;
+
+document.body.addEventListener('touchstart', function(e) {
+  e.preventDefault();
+  isTouching = true;
+  var t = e.changedTouches[0];
+  touchStartX = t.clientX; touchStartY = t.clientY;
+  touchStartTime = Date.now();
+
+  // Immediate gaze toward touch point
+  var g = touchToGaze(t.clientX, t.clientY);
+  tGazeXL = g.x; tGazeYL = g.y;
+  tGazeXR = g.x; tGazeYR = g.y;
+
+  // Long press (500ms) → pupils dilate (round, like a cat in the dark)
+  longPressTimer = setTimeout(function() {
+    isLongPressing = true;
+    tPupRx = 17; tPupRy = 24;
+  }, 500);
+}, { passive:false });
+
+document.body.addEventListener('touchmove', function(e) {
+  e.preventDefault();
+  if (!isTouching) return;
+
+  if (e.touches.length >= 2) {
+    // Two fingers: left finger → left eye, right finger → right eye (cross-eyed)
+    var sorted = [e.touches[0], e.touches[1]].sort(function(a,b){ return a.clientX - b.clientX; });
+    var gL2 = touchToGaze(sorted[0].clientX, sorted[0].clientY);
+    var gR2 = touchToGaze(sorted[1].clientX, sorted[1].clientY);
+    tGazeXL = gL2.x; tGazeYL = gL2.y;
+    tGazeXR = gR2.x; tGazeYR = gR2.y;
+  } else {
+    var g = touchToGaze(e.touches[0].clientX, e.touches[0].clientY);
+    tGazeXL = g.x; tGazeYL = g.y;
+    tGazeXR = g.x; tGazeYR = g.y;
+  }
+}, { passive:false });
+
+document.body.addEventListener('touchend', function(e) {
+  e.preventDefault();
+  clearTimeout(longPressTimer);
+
+  var t = e.changedTouches[0];
+  var duration = Date.now() - touchStartTime;
+  var dx = t.clientX - touchStartX, dy = t.clientY - touchStartY;
+  var moved = Math.sqrt(dx*dx + dy*dy) > 12;
+
+  if (isLongPressing) {
+    isLongPressing = false;
+    tPupRx = 10; tPupRy = currentLife.pupRy;
+  } else if (!moved && duration < 300) {
+    var now = Date.now();
+    if (now - lastTapTime < 350) {
+      // Double tap → surprised
+      doSurprise();
+    } else {
+      // Single tap:
+      //   left edge  (<20% width) → left wink
+      //   right edge (>80% width) → right wink
+      //   center area             → look toward tap + blink
+      var sw = window.innerWidth;
+      if      (t.clientX < sw * 0.2) blink('L');
+      else if (t.clientX > sw * 0.8) blink('R');
+      else                           doTapLook(t.clientX, t.clientY);
+    }
+    lastTapTime = now;
+  }
+
+  if (e.touches.length === 0) {
+    isTouching = false;
+    setTimeout(function() {
+      if (!isTouching) { tGazeXL=0; tGazeYL=0; tGazeXR=0; tGazeYR=0; }
+    }, 300);
+  }
+}, { passive:false });
+
+// ── Auto gaze drift (idle, peak/still up states) ─────────────────
+function scheduleAutoGaze() {
+  setTimeout(function() {
+    if (!isTouching && !isSurprised) {
+      var active = currentLife.label==='peak' || currentLife.label==='still up';
+      var gx = active ? (Math.random()-0.5)*16 : 0;
+      tGazeXL = gx; tGazeXR = gx;
+      tGazeYL = 0;  tGazeYR = 0;
+    }
+    setTimeout(function() {
+      if (!isTouching) { tGazeXL=0; tGazeXR=0; }
+      scheduleAutoGaze();
+    }, 1500+Math.random()*2500);
+  }, 4000+Math.random()*8000);
+}
+
+// ── Animation loop ───────────────────────────────────────────────
+function loop() {
+  // Lids — L/R independent so wink only closes one eye
+  if (!isWinkingL) dUpHL = lerp(dUpHL, tUpH, 0.05);
+  if (!isWinkingR) dUpHR = lerp(dUpHR, tUpH, 0.05);
+  dLoH = lerp(dLoH, tLoH, 0.05);
+  applyLids();
+
+  // Pupil size (ry=open/state, rx=dilation)
+  dPupRy = lerp(dPupRy, tPupRy, 0.04);
+  dPupRx = lerp(dPupRx, tPupRx, 0.05);
+  pL.setAttribute('ry', dPupRy); pR.setAttribute('ry', dPupRy);
+  pL.setAttribute('rx', dPupRx); pR.setAttribute('rx', dPupRx);
+
+  // Gaze — L/R independent for two-finger mode
+  dGazeXL = lerp(dGazeXL, tGazeXL, 0.1);
+  dGazeYL = lerp(dGazeYL, tGazeYL, 0.1);
+  dGazeXR = lerp(dGazeXR, tGazeXR, 0.1);
+  dGazeYR = lerp(dGazeYR, tGazeYR, 0.1);
+  pL.setAttribute('cx', 75  + dGazeXL); pL.setAttribute('cy', 70 + dGazeYL);
+  pR.setAttribute('cx', 245 + dGazeXR); pR.setAttribute('cy', 70 + dGazeYR);
+
+  requestAnimationFrame(loop);
+}
+
+// ── Clock + hourly state refresh ─────────────────────────────────
+function updateClock() {
+  var now = new Date();
+  var hh  = String(now.getHours()).padStart(2,'0');
+  var mm  = String(now.getMinutes()).padStart(2,'0');
+  clockEl.textContent = hh+':'+mm;
+  cBR.textContent     = hh+':'+mm;
+  currentLife = getLife(now.getHours());
+  applyLife(currentLife);
+}
+
+// ── Init ─────────────────────────────────────────────────────────
+dUpHL = dUpHR = currentLife.upH;
+dLoH  = currentLife.loH;
+dPupRy = currentLife.pupRy;
+applyLife(currentLife);
+applyLids();
+pL.setAttribute('ry', dPupRy); pR.setAttribute('ry', dPupRy);
+
+updateClock();
+setInterval(updateClock, 30000);
+scheduleBlink();
+scheduleAutoGaze();
+loop();
+</script>
+</body>
+</html>
