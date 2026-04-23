@@ -156,6 +156,8 @@ var LIFE = [
 ];
 
 var BREATH = { zzz:6000, meh:4500, 'still up':3800, warming:3800, peak:3200 };
+// Gaze spring params per state: [stiffness, damping]
+var GAZE_SPRING = { zzz:[0.07,0.88], meh:[0.12,0.84], warming:[0.15,0.80], 'still up':[0.18,0.76], peak:[0.22,0.72] };
 
 function getLife(h) {
   for (var i = 0; i < LIFE.length; i++)
@@ -185,6 +187,7 @@ var dPupRx=10, tPupRx=10;
 // Gaze: independent L/R for two-finger cross-eye mode
 var dGazeXL=0, dGazeYL=0, tGazeXL=0, tGazeYL=0;
 var dGazeXR=0, dGazeYR=0, tGazeXR=0, tGazeYR=0;
+var gazeVelXL=0, gazeVelYL=0, gazeVelXR=0, gazeVelYR=0;
 // Gyro base gaze
 var gyroX=0, gyroY=0, gyroReady=false;
 var dGyroX=0, dGyroY=0, gyroVelX=0;
@@ -575,11 +578,13 @@ function loop() {
   pL.setAttribute('ry', dPupRy); pR.setAttribute('ry', dPupRy);
   pL.setAttribute('rx', dPupRx); pR.setAttribute('rx', dPupRx);
 
-  // Gaze — L/R independent for two-finger mode (touch only)
-  dGazeXL = lerp(dGazeXL, tGazeXL, 0.1);
-  dGazeYL = lerp(dGazeYL, tGazeYL, 0.1);
-  dGazeXR = lerp(dGazeXR, tGazeXR, 0.1);
-  dGazeYR = lerp(dGazeYR, tGazeYR, 0.1);
+  // Gaze — spring physics, state-dependent stiffness/damping
+  var sp = GAZE_SPRING[currentLife.label] || [0.15, 0.80];
+  var gs = sp[0], gd = sp[1];
+  gazeVelXL += (tGazeXL - dGazeXL) * gs; gazeVelXL *= gd; dGazeXL += gazeVelXL;
+  gazeVelYL += (tGazeYL - dGazeYL) * gs; gazeVelYL *= gd; dGazeYL += gazeVelYL;
+  gazeVelXR += (tGazeXR - dGazeXR) * gs; gazeVelXR *= gd; dGazeXR += gazeVelXR;
+  gazeVelYR += (tGazeYR - dGazeYR) * gs; gazeVelYR *= gd; dGazeYR += gazeVelYR;
   pL.setAttribute('cx', 75  + dGazeXL); pL.setAttribute('cy', 70 + dGazeYL);
   pR.setAttribute('cx', 245 + dGazeXR); pR.setAttribute('cy', 70 + dGazeYR);
   iL.setAttribute('cx', 75  + dGazeXL); iL.setAttribute('cy', 70 + dGazeYL);
