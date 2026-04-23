@@ -59,6 +59,19 @@ body {
 </head>
 <body>
 
+<!-- Gyro permission tap — shown once on iOS, hidden after grant -->
+<div id="gyroHint" style="
+  position:fixed;inset:0;z-index:100;
+  display:flex;align-items:flex-end;justify-content:center;
+  padding-bottom:max(40px,env(safe-area-inset-bottom));
+  pointer-events:none;
+">
+  <span style="
+    font-family:'DM Mono',monospace;font-size:9px;letter-spacing:2px;
+    text-transform:uppercase;color:#333;
+  ">tap to enable gyro</span>
+</div>
+
 <div class="c tl">LIL GUY</div>
 <div class="c tr" id="cTR">—</div>
 <div class="c bl" id="cBL">—</div>
@@ -173,8 +186,18 @@ var dGazeXR=0, dGazeYR=0, tGazeXR=0, tGazeYR=0;
 // Gyro base gaze
 var gyroX=0, gyroY=0, gyroReady=false;
 
-function setupGyro() {
-  if (gyroReady) return;
+function startGyro() {
+  gyroReady = true;
+  document.getElementById('gyroHint').style.display = 'none';
+  window.addEventListener('deviceorientation', function(e) {
+    gyroX = Math.max(-15, Math.min(15, (e.gamma || 0) * 0.75));
+    gyroY = Math.max(-7,  Math.min(7,  ((e.beta  || 90) - 90) * 0.35));
+  });
+}
+
+// iOS requires requestPermission() called directly inside a user gesture handler
+document.addEventListener('touchend', function handler() {
+  document.removeEventListener('touchend', handler);
   if (typeof DeviceOrientationEvent !== 'undefined' &&
       typeof DeviceOrientationEvent.requestPermission === 'function') {
     DeviceOrientationEvent.requestPermission().then(function(s) {
@@ -183,15 +206,7 @@ function setupGyro() {
   } else {
     startGyro();
   }
-}
-
-function startGyro() {
-  gyroReady = true;
-  window.addEventListener('deviceorientation', function(e) {
-    gyroX = Math.max(-15, Math.min(15, (e.gamma || 0) * 0.75));
-    gyroY = Math.max(-7,  Math.min(7,  ((e.beta  || 90) - 90) * 0.35));
-  });
-}
+}, { once: true });
 // State flags
 var isWinkingL=false, isWinkingR=false;
 var isSurprised=false, isLongPressing=false, isTouching=false;
@@ -291,7 +306,6 @@ var touchStartX=0, touchStartY=0, touchStartTime=0;
 
 document.body.addEventListener('touchstart', function(e) {
   e.preventDefault();
-  setupGyro();
   isTouching = true;
   var t = e.changedTouches[0];
   touchStartX = t.clientX; touchStartY = t.clientY;
