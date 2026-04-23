@@ -187,7 +187,7 @@ var dGazeXL=0, dGazeYL=0, tGazeXL=0, tGazeYL=0;
 var dGazeXR=0, dGazeYR=0, tGazeXR=0, tGazeYR=0;
 // Gyro base gaze
 var gyroX=0, gyroY=0, gyroReady=false;
-var dGyroX=0, dGyroY=0;
+var dGyroX=0, dGyroY=0, gyroVelX=0;
 // Mouse base gaze (desktop)
 var mouseGazeX=0, mouseGazeY=0;
 // Cat head tilt
@@ -586,17 +586,23 @@ function loop() {
   iR.setAttribute('cx', 245 + dGazeXR); iR.setAttribute('cy', 70 + dGazeYR);
 
   // Gyro + float + cat lean/tilt
-  dGyroX      = lerp(dGyroX, gyroX, 0.03);
+  var gyroDiff = gyroX - dGyroX;
+  var gyroPull = Math.min(Math.abs(gyroDiff) / 8, 1);  // 8px以下は弱く引く
+  gyroVelX += gyroDiff * 0.038 * gyroPull;
+  gyroVelX *= 0.82;
+  dGyroX    += gyroVelX;
   dTilt       = lerp(dTilt, tTilt, 0.015);
   blinkWobble = lerp(blinkWobble, blinkWobbleTarget, 0.09);
   var t = Date.now();
   var tiltMag = Math.abs(dTilt) / 3.5;
   var floatY  = (Math.sin(t / 2800) * 10 + Math.sin(t / 1700) * 4) * (1 - tiltMag * 0.6);
-  var lean    = dGyroX * 0.04;
+  var tremor  = (Math.random() - 0.5) * 0.45;
+  var dispX   = dGyroX + tremor;
+  var lean    = dispX * 0.04;
   var breathPeriod = BREATH[currentLife.label] || 4000;
   var breathScale  = 0.992 + breathWave(t, breathPeriod) * 0.016;
   eyeWrap.style.transform =
-    'translate(calc(-50% + ' + dGyroX.toFixed(1) + 'px), calc(-50% + ' + floatY.toFixed(1) + 'px))' +
+    'translate(calc(-50% + ' + dispX.toFixed(2) + 'px), calc(-50% + ' + floatY.toFixed(1) + 'px))' +
     ' rotate(' + (lean + dTilt + blinkWobble).toFixed(2) + 'deg)' +
     ' scale(' + breathScale.toFixed(4) + ')';
 
