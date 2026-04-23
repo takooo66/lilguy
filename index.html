@@ -155,6 +155,8 @@ var LIFE = [
   { r:[21,24], label:'peak',     upH:0,  loH:0,  pupRy:28, fill:'#b0b0b0', glow:true  },
 ];
 
+var BREATH = { zzz:6000, meh:4500, 'still up':3800, warming:3800, peak:3200 };
+
 function getLife(h) {
   for (var i = 0; i < LIFE.length; i++)
     if (h >= LIFE[i].r[0] && h < LIFE[i].r[1]) return LIFE[i];
@@ -186,6 +188,8 @@ var dGazeXR=0, dGazeYR=0, tGazeXR=0, tGazeYR=0;
 // Gyro base gaze
 var gyroX=0, gyroY=0, gyroReady=false;
 var dGyroX=0, dGyroY=0;
+// Mouse base gaze (desktop)
+var mouseGazeX=0, mouseGazeY=0;
 // Cat head tilt
 var dTilt=0, tTilt=0;
 
@@ -314,6 +318,19 @@ function touchToGaze(tx, ty) {
   return { x: (dx/dist)*s*15, y: (dy/dist)*s*7 };
 }
 
+// Mouse gaze — throttled to one update per rAF frame
+var _mouseMoveScheduled = false;
+window.addEventListener('mousemove', function(e) {
+  if (isTouching || _mouseMoveScheduled) return;
+  _mouseMoveScheduled = true;
+  requestAnimationFrame(function() {
+    var g = touchToGaze(e.clientX, e.clientY);
+    mouseGazeX = g.x * 0.35;
+    mouseGazeY = g.y * 0.35;
+    _mouseMoveScheduled = false;
+  });
+});
+
 // ── Reactions ────────────────────────────────────────────────────
 function doSurprise() {
   isSurprised = true;
@@ -412,7 +429,7 @@ document.body.addEventListener('touchend', function(e) {
   if (e.touches.length === 0) {
     isTouching = false;
     setTimeout(function() {
-      if (!isTouching) { tGazeXL=0; tGazeYL=0; tGazeXR=0; tGazeYR=0; }
+      if (!isTouching) { tGazeXL=mouseGazeX; tGazeYL=mouseGazeY; tGazeXR=mouseGazeX; tGazeYR=mouseGazeY; }
     }, 300);
   }
 }, { passive:false });
@@ -423,14 +440,55 @@ function scheduleAutoGaze() {
     if (!isTouching && !isSurprised) {
       var active = currentLife.label==='peak' || currentLife.label==='still up';
       var gx = active ? (Math.random()-0.5)*16 : 0;
-      tGazeXL = gx; tGazeXR = gx;
-      tGazeYL = 0;  tGazeYR = 0;
+      var clampX = Math.max(-12, Math.min(12, mouseGazeX + gx));
+      var clampY = Math.max(-6,  Math.min(6,  mouseGazeY));
+      tGazeXL = clampX; tGazeXR = clampX;
+      tGazeYL = clampY; tGazeYR = clampY;
     }
     setTimeout(function() {
-      if (!isTouching) { tGazeXL=0; tGazeXR=0; }
+      if (!isTouching) { tGazeXL=mouseGazeX; tGazeXR=mouseGazeX; tGazeYL=mouseGazeY; tGazeYR=mouseGazeY; }
       scheduleAutoGaze();
     }, 1500+Math.random()*2500);
   }, 4000+Math.random()*8000);
+}
+
+// ── Breathing wave: inhale(30%) → hold(10%) → exhale(60%) ────────
+function breathWave(t, period) {
+  var phase = (t % period) / period;
+  if (phase < 0.30) {
+    var p = phase / 0.30;
+    return p * p;            // ease-in: quick inhale
+  } else if (phase < 0.40) {
+    return 1.0;              // hold at peak
+  } else {
+    var p = (phase - 0.40) / 0.60;
+    return 1.0 - p * p;     // ease-out: slow exhale
+  }
+}
+
+// ── Micro-saccades (involuntary eye micro-movements) ─────────────
+var microSaccadePending = false;
+function scheduleMicroSaccade() {
+  setTimeout(function() {
+    if (isTouching || isWinkingL || isSurprised || microSaccadePending) {
+      scheduleMicroSaccade(); return;
+    }
+    microSaccadePending = true;
+    var baseXL = tGazeXL, baseXR = tGazeXR;
+    var baseYL = tGazeYL, baseYR = tGazeYR;
+    var sx = (Math.random() - 0.5) * 5;
+    var sy = (Math.random() - 0.5) * 2.5;
+    tGazeXL += sx; tGazeXR += sx;
+    tGazeYL += sy; tGazeYR += sy;
+    setTimeout(function() {
+      if (!isTouching && !isSurprised) {
+        tGazeXL = baseXL; tGazeXR = baseXR;
+        tGazeYL = baseYL; tGazeYR = baseYR;
+      }
+      microSaccadePending = false;
+      scheduleMicroSaccade();
+    }, 350 + Math.random() * 150);
+  }, 2000 + Math.random() * 3000);
 }
 
 // ── Animation loop ───────────────────────────────────────────────
@@ -463,9 +521,12 @@ function loop() {
   var t = Date.now();
   var floatY = Math.sin(t / 2800) * 10 + Math.sin(t / 1700) * 4;
   var lean   = dGyroX * 0.04;
+  var breathPeriod = BREATH[currentLife.label] || 4000;
+  var breathScale  = 0.992 + breathWave(t, breathPeriod) * 0.016;
   eyeWrap.style.transform =
     'translate(calc(-50% + ' + dGyroX.toFixed(1) + 'px), calc(-50% + ' + floatY.toFixed(1) + 'px))' +
-    ' rotate(' + (lean + dTilt).toFixed(2) + 'deg)';
+    ' rotate(' + (lean + dTilt).toFixed(2) + 'deg)' +
+    ' scale(' + breathScale.toFixed(4) + ')';
 
   requestAnimationFrame(loop);
 }
@@ -494,6 +555,7 @@ setInterval(updateClock, 30000);
 scheduleBlink();
 scheduleAutoGaze();
 scheduleHeadTilt();
+scheduleMicroSaccade();
 loop();
 </script>
 </body>
