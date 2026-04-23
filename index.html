@@ -186,6 +186,8 @@ var dGazeXR=0, dGazeYR=0, tGazeXR=0, tGazeYR=0;
 // Gyro base gaze
 var gyroX=0, gyroY=0, gyroReady=false;
 var dGyroX=0, dGyroY=0;
+// Cat head tilt
+var dTilt=0, tTilt=0;
 
 function startGyro() {
   gyroReady = true;
@@ -260,10 +262,44 @@ function scheduleBlink() {
         : label==='meh'      ?  5000+Math.random()*4000
         :                       3000+Math.random()*3000;
   setTimeout(function() {
-    blink();
-    if (Math.random() < 0.18) setTimeout(function(){ blink(); }, 230);
+    if (Math.random() < 0.22) slowBlink();
+    else {
+      blink();
+      if (Math.random() < 0.18) setTimeout(function(){ blink(); }, 230);
+    }
     scheduleBlink();
   }, d);
+}
+
+// Cat slow blink (love blink) — gradual close/open via rAF
+function slowBlink() {
+  if (isWinkingL || isWinkingR) return;
+  isWinkingL = true; isWinkingR = true;
+  var startH = dUpHL, t0 = performance.now();
+  (function closeStep() {
+    var p = Math.min(1, (performance.now() - t0) / 520);
+    var e = p < 0.5 ? 2*p*p : -1+(4-2*p)*p;
+    dUpHL = dUpHR = startH + (74 - startH) * e;
+    if (p < 1) { requestAnimationFrame(closeStep); return; }
+    setTimeout(function() {
+      var t1 = performance.now();
+      (function openStep() {
+        var q = Math.min(1, (performance.now() - t1) / 420);
+        dUpHL = dUpHR = 74 * (1 - q);
+        if (q < 1) requestAnimationFrame(openStep);
+        else { isWinkingL = false; isWinkingR = false; }
+      })();
+    }, 130);
+  })();
+}
+
+// Curiosity head tilt — random small rotation
+function scheduleHeadTilt() {
+  setTimeout(function() {
+    tTilt = (Math.random() - 0.5) * 7;
+    setTimeout(function() { tTilt = 0; scheduleHeadTilt(); },
+      1200 + Math.random() * 2000);
+  }, 5000 + Math.random() * 10000);
 }
 
 // ── Touch → gaze offset (in SVG units) ──────────────────────────
@@ -421,10 +457,15 @@ function loop() {
   iL.setAttribute('cx', 75  + dGazeXL); iL.setAttribute('cy', 70 + dGazeYL);
   iR.setAttribute('cx', 245 + dGazeXR); iR.setAttribute('cy', 70 + dGazeYR);
 
-  // Gyro — move entire eye wrap position
+  // Gyro + float + cat lean/tilt
   dGyroX = lerp(dGyroX, gyroX, 0.03);
-  var floatY = Math.sin(Date.now() / 2800) * 14;
-  eyeWrap.style.transform = 'translate(calc(-50% + ' + dGyroX.toFixed(1) + 'px), calc(-50% + ' + floatY.toFixed(1) + 'px))';
+  dTilt  = lerp(dTilt, tTilt, 0.015);
+  var t = Date.now();
+  var floatY = Math.sin(t / 2800) * 10 + Math.sin(t / 1700) * 4;
+  var lean   = dGyroX * 0.04;
+  eyeWrap.style.transform =
+    'translate(calc(-50% + ' + dGyroX.toFixed(1) + 'px), calc(-50% + ' + floatY.toFixed(1) + 'px))' +
+    ' rotate(' + (lean + dTilt).toFixed(2) + 'deg)';
 
   requestAnimationFrame(loop);
 }
@@ -452,6 +493,7 @@ updateClock();
 setInterval(updateClock, 30000);
 scheduleBlink();
 scheduleAutoGaze();
+scheduleHeadTilt();
 loop();
 </script>
 </body>
