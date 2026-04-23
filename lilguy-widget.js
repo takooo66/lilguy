@@ -90,12 +90,6 @@ async function createWidget() {
   drawEye(ctx, lx, ey, eyeW, eyeH, state)
   drawEye(ctx, rx, ey, eyeW, eyeH, state)
 
-  // label
-  const tf = new Font('Menlo', 10)
-  ctx.setFont(tf)
-  ctx.setTextColor(rgba(140, 140, 140, 1))
-  ctx.drawText(state.label, new Point(cw/2 - 26, ey + eyeH/2 + 10))
-
   const img = ctx.getImage()
   const stack = w.addStack()
   stack.layoutVertically()
