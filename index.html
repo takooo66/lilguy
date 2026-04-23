@@ -91,6 +91,7 @@ body {
   <g id="gL">
     <path id="sL" d="M20 70 C35 28,115 28,130 70 C115 102,35 102,20 70Z" fill="#d0d0d0"/>
     <g clip-path="url(#cL)">
+      <ellipse id="iL" cx="75"  cy="70" rx="22" ry="22" fill="#c4892a"/>
       <ellipse id="pL" cx="75"  cy="70" rx="10" ry="28" fill="#060606"/>
       <rect    id="uL" x="18"  y="28"  width="114" height="0" fill="#000"/>
       <rect    id="lL" x="18"  y="102" width="114" height="0" fill="#000"/>
@@ -101,6 +102,7 @@ body {
   <g id="gR">
     <path id="sR" d="M190 70 C205 28,285 28,300 70 C285 102,205 102,190 70Z" fill="#d0d0d0"/>
     <g clip-path="url(#cR)">
+      <ellipse id="iR" cx="245" cy="70" rx="22" ry="22" fill="#c4892a"/>
       <ellipse id="pR" cx="245" cy="70" rx="10" ry="28" fill="#060606"/>
       <rect    id="uR" x="188" y="28"  width="114" height="0" fill="#000"/>
       <rect    id="lR" x="188" y="102" width="114" height="0" fill="#000"/>
@@ -146,6 +148,7 @@ var currentLife = getLife(new Date().getHours());
 // DOM refs
 var sL=document.getElementById('sL'), sR=document.getElementById('sR');
 var pL=document.getElementById('pL'), pR=document.getElementById('pR');
+var iL=document.getElementById('iL'), iR=document.getElementById('iR');
 var uL=document.getElementById('uL'), uR=document.getElementById('uR');
 var lL=document.getElementById('lL'), lR=document.getElementById('lR');
 var gL=document.getElementById('gL'), gR=document.getElementById('gR');
@@ -371,6 +374,8 @@ function loop() {
   dGazeYR = lerp(dGazeYR, tGazeYR, 0.1);
   pL.setAttribute('cx', 75  + dGazeXL); pL.setAttribute('cy', 70 + dGazeYL);
   pR.setAttribute('cx', 245 + dGazeXR); pR.setAttribute('cy', 70 + dGazeYR);
+  iL.setAttribute('cx', 75  + dGazeXL); iL.setAttribute('cy', 70 + dGazeYL);
+  iR.setAttribute('cx', 245 + dGazeXR); iR.setAttribute('cy', 70 + dGazeYR);
 
   requestAnimationFrame(loop);
 }
