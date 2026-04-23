@@ -193,8 +193,8 @@ function startGyro() {
   window.addEventListener('deviceorientation', function(e) {
     // gamma: 左右傾き → eyeWrap を横に ±40px
     // beta:  前後傾き → eyeWrap を縦に ±20px
-    gyroX = Math.max(-40, Math.min(40, (e.gamma || 0) * 2));
-    gyroY = Math.max(-20, Math.min(20, ((e.beta  || 90) - 90) * 1));
+    gyroX = Math.max(-45, Math.min(45, (e.gamma || 0) * 2.2));
+    gyroY = Math.max(-40, Math.min(40, ((e.beta  || 90) - 90) * 2));
   });
 }
 
@@ -423,8 +423,8 @@ function loop() {
   iR.setAttribute('cx', 245 + dGazeXR); iR.setAttribute('cy', 70 + dGazeYR);
 
   // Gyro — move entire eye wrap position
-  dGyroX = lerp(dGyroX, gyroX, 0.25);
-  dGyroY = lerp(dGyroY, gyroY, 0.25);
+  dGyroX = lerp(dGyroX, gyroX, 0.08);
+  dGyroY = lerp(dGyroY, gyroY, 0.08);
   eyeWrap.style.transform = 'translate(calc(-50% + ' + dGyroX.toFixed(1) + 'px), calc(-50% + ' + dGyroY.toFixed(1) + 'px))';
 
   requestAnimationFrame(loop);
