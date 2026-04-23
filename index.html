@@ -262,7 +262,7 @@ function scheduleBlink() {
         : label==='meh'      ?  5000+Math.random()*4000
         :                       3000+Math.random()*3000;
   setTimeout(function() {
-    if (Math.random() < 0.22) slowBlink();
+    if (Math.random() < 0.05) slowBlink();
     else {
       blink();
       if (Math.random() < 0.18) setTimeout(function(){ blink(); }, 230);
