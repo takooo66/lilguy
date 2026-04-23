@@ -179,10 +179,8 @@ function lerp(a, b, t) { return a + (b-a)*t; }
 
 function applyLids() {
   uL.setAttribute('height', dUpHL); uR.setAttribute('height', dUpHR);
-  var effLoHL = dLoH + Math.max(0, dGazeYL);
-  var effLoHR = dLoH + Math.max(0, dGazeYR);
-  lL.setAttribute('height', effLoHL); lR.setAttribute('height', effLoHR);
-  lL.setAttribute('y', 102 - effLoHL); lR.setAttribute('y', 102 - effLoHR);
+  lL.setAttribute('height', dLoH);  lR.setAttribute('height', dLoH);
+  lL.setAttribute('y', 102-dLoH);   lR.setAttribute('y', 102-dLoH);
 }
 
 function applyLife(life) {
