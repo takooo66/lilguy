@@ -525,6 +525,7 @@ var lastTapTime=0, longPressTimer=null;
 var touchStartX=0, touchStartY=0, touchStartTime=0;
 
 document.body.addEventListener('touchstart', function(e) {
+  if (e.target.closest('button')) return;
   e.preventDefault();
   isTouching = true;
   if (dozeExtra > 0) { dozeExtra = 0; tUpH = currentLife.upH + weatherMod.upHOffset; }
@@ -545,6 +546,7 @@ document.body.addEventListener('touchstart', function(e) {
 }, { passive:false });
 
 document.body.addEventListener('touchmove', function(e) {
+  if (e.target.closest('button')) return;
   e.preventDefault();
   if (!isTouching) return;
 
@@ -562,6 +564,7 @@ document.body.addEventListener('touchmove', function(e) {
 }, { passive:false });
 
 document.body.addEventListener('touchend', function(e) {
+  if (e.target.closest('button')) return;
   e.preventDefault();
   clearTimeout(longPressTimer);
 
