@@ -116,6 +116,7 @@ body {
 <video id="camVid" playsinline muted style="display:none"></video>
 <button id="camBtn" class="cam-btn" title="eye contact">◯</button>
 <button id="wakeBtn" class="wake-btn" title="wake up">z</button>
+<div id="camErr" style="position:fixed;top:80px;left:50%;transform:translateX(-50%);z-index:50;font-family:'DM Mono',monospace;font-size:9px;color:#c4892a;text-align:center;max-width:80vw;display:none;pointer-events:none;letter-spacing:1px;"></div>
 
 <div class="c tl">LIL GUY</div>
 <div class="c tr" id="cTR">—</div>
@@ -763,28 +764,66 @@ var camActive = false;
 var faceLandmarker = null;
 var faceGazeX = 0, faceGazeY = 0;
 
+var camErr = document.getElementById('camErr');
+function showCamErr(msg) {
+  camErr.textContent = msg;
+  camErr.style.display = 'block';
+  setTimeout(function(){ camErr.style.display = 'none'; }, 6000);
+}
+
+async function loadFaceLandmarker(modelMod, fileset, delegate) {
+  return await modelMod.FaceLandmarker.createFromOptions(fileset, {
+    baseOptions: {
+      modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task',
+      delegate: delegate
+    },
+    runningMode: 'VIDEO',
+    numFaces: 1
+  });
+}
+
 async function startFaceTracking() {
   camBtn.classList.add('loading');
   try {
-    if (!faceLandmarker) {
-      var mod = await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.9/vision_bundle.mjs');
-      var fileset = await mod.FilesetResolver.forVisionTasks(
-        'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.9/wasm'
-      );
-      faceLandmarker = await mod.FaceLandmarker.createFromOptions(fileset, {
-        baseOptions: {
-          modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task',
-          delegate: 'GPU'
-        },
-        runningMode: 'VIDEO',
-        numFaces: 1
+    // 1. camera first (fails fast on permission denial)
+    var stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: { width: 320, height: 240, facingMode: 'user' }, audio: false
       });
+    } catch (eCam) {
+      throw new Error('CAMERA: ' + (eCam.name || eCam.message || 'denied'));
     }
-    var stream = await navigator.mediaDevices.getUserMedia({
-      video: { width: 320, height: 240, facingMode: 'user' }, audio: false
-    });
     camVid.srcObject = stream;
     await camVid.play();
+
+    // 2. load MediaPipe (GPU → CPU fallback)
+    if (!faceLandmarker) {
+      var mod;
+      try {
+        mod = await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.9/vision_bundle.mjs');
+      } catch (eImp) {
+        throw new Error('IMPORT: ' + (eImp.message || 'blocked'));
+      }
+      var fileset;
+      try {
+        fileset = await mod.FilesetResolver.forVisionTasks(
+          'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.9/wasm'
+        );
+      } catch (eFs) {
+        throw new Error('WASM: ' + (eFs.message || 'failed'));
+      }
+      try {
+        faceLandmarker = await loadFaceLandmarker(mod, fileset, 'GPU');
+      } catch (eGpu) {
+        try {
+          faceLandmarker = await loadFaceLandmarker(mod, fileset, 'CPU');
+        } catch (eCpu) {
+          throw new Error('MODEL: ' + (eCpu.message || eGpu.message || 'failed'));
+        }
+      }
+    }
+
     camActive = true;
     camBtn.classList.remove('loading');
     camBtn.classList.add('on');
@@ -792,6 +831,11 @@ async function startFaceTracking() {
     detectLoop();
   } catch (e) {
     camBtn.classList.remove('loading');
+    if (camVid.srcObject) {
+      camVid.srcObject.getTracks().forEach(function(t) { t.stop(); });
+      camVid.srcObject = null;
+    }
+    showCamErr(String(e.message || e));
     console.error('face tracking failed', e);
   }
 }
