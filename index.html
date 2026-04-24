@@ -223,6 +223,7 @@ document.addEventListener('touchend', function handler() {
 // State flags
 var isWinkingL=false, isWinkingR=false;
 var isSurprised=false, isLongPressing=false, isTouching=false;
+var isExpressing=false, tapCount=0, tapResetTimer=null;
 // Idle doze
 var lastInteractTime=Date.now(), dozeExtra=0;
 // Weather modifier (Tokyo)
@@ -426,6 +427,53 @@ function doTapLook(tx, ty) {
   }, 200);
 }
 
+function doAffection() {
+  if (isExpressing) return;
+  isExpressing = true;
+  tUpH = currentLife.upH + 14;
+  tLoH = currentLife.loH + 6;
+  tPupRy = 10; tPupRx = 8;
+  tGazeYL = -7; tGazeYR = -7;
+  tTilt = 4;
+  slowBlink();
+  setTimeout(function() {
+    tUpH = currentLife.upH; tLoH = currentLife.loH;
+    tPupRy = 12; tPupRx = 3;
+    tGazeYL = 0; tGazeYR = 0; tTilt = 0;
+    isExpressing = false;
+  }, 2200);
+}
+
+function doAnger() {
+  if (isExpressing) return;
+  isExpressing = true;
+  tUpH = currentLife.upH + 22;
+  tLoH = currentLife.loH + 18;
+  tPupRy = 17; tPupRx = 2;
+  tGazeYL = 5; tGazeYR = 5;
+  tTilt = -5;
+  setTimeout(function() {
+    tUpH = currentLife.upH; tLoH = currentLife.loH;
+    tPupRy = 12; tPupRx = 3;
+    tGazeYL = 0; tGazeYR = 0; tTilt = 0;
+    isExpressing = false;
+  }, 2000);
+}
+
+function doIgnore() {
+  if (isExpressing) return;
+  isExpressing = true;
+  tGazeXL = -30; tGazeXR = -30;
+  tGazeYL = -2;  tGazeYR = -2;
+  tUpH = currentLife.upH + 8;
+  setTimeout(function() {
+    tGazeXL = 0; tGazeXR = 0;
+    tGazeYL = 0; tGazeYR = 0;
+    tUpH = currentLife.upH;
+    isExpressing = false;
+  }, 2500);
+}
+
 // ── Touch event handlers ─────────────────────────────────────────
 var lastTapTime=0, longPressTimer=null;
 var touchStartX=0, touchStartY=0, touchStartTime=0;
@@ -483,9 +531,19 @@ document.body.addEventListener('touchend', function(e) {
     tPupRx = 10; tPupRy = currentLife.pupRy;
   } else if (!moved && duration < 300) {
     var now = Date.now();
-    if (now - lastTapTime < 350) {
-      // Double tap → surprised
+    tapCount++;
+    clearTimeout(tapResetTimer);
+    tapResetTimer = setTimeout(function() { tapCount = 0; }, 450);
+
+    if (tapCount === 2 && now - lastTapTime < 350) {
       doSurprise();
+      tapCount = 0; lastTapTime = 0;
+    } else if (tapCount >= 3) {
+      tapCount = 0; clearTimeout(tapResetTimer);
+      var tx = t.clientX / window.innerWidth;
+      if      (tx < 0.30) doAnger();
+      else if (tx > 0.70) doIgnore();
+      else                doAffection();
     } else {
       // Single tap:
       //   left edge  (<20% width) → left wink
@@ -495,8 +553,8 @@ document.body.addEventListener('touchend', function(e) {
       if      (t.clientX < sw * 0.2) blink('L');
       else if (t.clientX > sw * 0.8) blink('R');
       else                           doTapLook(t.clientX, t.clientY);
+      lastTapTime = now;
     }
-    lastTapTime = now;
   }
 
   if (e.touches.length === 0) {
