@@ -157,9 +157,6 @@ body {
     <g clip-path="url(#cL)">
       <ellipse id="iL" cx="75"  cy="70" rx="22" ry="22" fill="#c4892a"/>
       <ellipse id="pL" cx="75"  cy="70" rx="5" ry="28" fill="#060606"/>
-      <!-- Catchlights — follow pupil, opacity driven by life state -->
-      <ellipse id="hlL"  cx="72"  cy="62" rx="2.5" ry="3" fill="#fff" opacity="0"/>
-      <ellipse id="hl2L" cx="79"  cy="74" rx="1"   ry="1" fill="#fff" opacity="0"/>
       <rect    id="uL" x="18"  y="28"  width="114" height="0" fill="#000"/>
       <rect    id="lL" x="18"  y="102" width="114" height="0" fill="#000"/>
     </g>
@@ -171,9 +168,6 @@ body {
     <g clip-path="url(#cR)">
       <ellipse id="iR" cx="245" cy="70" rx="22" ry="22" fill="#c4892a"/>
       <ellipse id="pR" cx="245" cy="70" rx="5" ry="28" fill="#060606"/>
-      <!-- Catchlights -->
-      <ellipse id="hlR"  cx="242" cy="62" rx="2.5" ry="3" fill="#fff" opacity="0"/>
-      <ellipse id="hl2R" cx="249" cy="74" rx="1"   ry="1" fill="#fff" opacity="0"/>
       <rect    id="uR" x="188" y="28"  width="114" height="0" fill="#000"/>
       <rect    id="lR" x="188" y="102" width="114" height="0" fill="#000"/>
     </g>
@@ -225,8 +219,6 @@ var iL=document.getElementById('iL'), iR=document.getElementById('iR');
 var uL=document.getElementById('uL'), uR=document.getElementById('uR');
 var lL=document.getElementById('lL'), lR=document.getElementById('lR');
 var gL=document.getElementById('gL'), gR=document.getElementById('gR');
-var hlL=document.getElementById('hlL'),   hlR=document.getElementById('hlR');
-var hl2L=document.getElementById('hl2L'), hl2R=document.getElementById('hl2R');
 var cTR=document.getElementById('cTR'), cBR=document.getElementById('cBR');
 var clockEl=document.getElementById('clock');
 
@@ -249,8 +241,6 @@ var mouseGazeX=0, mouseGazeY=0;
 // Head tilt + post-blink wobble
 var dTilt=0, tTilt=0;
 var blinkWobble=0, blinkWobbleTarget=0;
-// Catchlight opacity (fades between states)
-var dHlOpacity=0, tHlOpacity=0;
 
 function startGyro() {
   gyroReady = true;
@@ -300,10 +290,6 @@ function applyLife(life) {
   var gf = life.glow ? 'url(#glow)' : 'none';
   gL.setAttribute('filter', gf); gR.setAttribute('filter', gf);
   cTR.textContent = life.label;
-  // Catchlight brightness by state
-  tHlOpacity = life.label==='zzz'     ? 0
-             : life.label==='meh'     ? 0.40
-             : life.label==='warming' ? 0.65 : 0.88;
 }
 
 // ── Blink / Wink ─────────────────────────────────────────────────
@@ -525,23 +511,23 @@ function doIgnore() {
   }, 2500);
 }
 
-// ジト目 — 長押し1.5秒で散瞳からシフト
+// ジト目 — 長押し1.5秒で散瞳からシフト。半目でじーっと正面を見る
 function doJitome() {
   if (isExpressing) return;
   isExpressing = true;
   isLongPressing = false;
-  tUpH = currentLife.upH + 20;
-  tLoH = currentLife.loH + 14;
-  tPupRy = 9; tPupRx = 3;
-  tGazeXL = 5; tGazeXR = 5;
-  tGazeYL = 3; tGazeYR = 3;
-  tTilt = 2;
+  tUpH = currentLife.upH + 24;  // 深めに落ちた上まぶた
+  tLoH = currentLife.loH + 8;   // 下まぶたも少し上がる
+  tPupRy = 12; tPupRx = 4;      // 細めだが完全スリットではない
+  // 視線は正面固定（じーっと見る）
+  tGazeXL = 0; tGazeXR = 0;
+  tGazeYL = 0; tGazeYR = 0;
+  tTilt = 0;
   setTimeout(function() {
     tUpH = currentLife.upH; tLoH = currentLife.loH;
     tPupRy = currentLife.pupRy; tPupRx = 5;
-    tGazeXL = 0; tGazeXR = 0; tGazeYL = 0; tGazeYR = 0; tTilt = 0;
     isExpressing = false;
-  }, 3000);
+  }, 3500);
 }
 
 // ── Touch event handlers ─────────────────────────────────────────
@@ -671,7 +657,7 @@ function breathWave(t, period) {
   }
 }
 
-// ── Micro-saccades — biometric: instant jump + post-saccadic oscillation ──
+// ── Micro-saccades — smooth target shift (spring chases new position naturally) ──
 var microSaccadePending = false;
 function scheduleMicroSaccade() {
   setTimeout(function() {
@@ -679,21 +665,21 @@ function scheduleMicroSaccade() {
       scheduleMicroSaccade(); return;
     }
     microSaccadePending = true;
-    // Direct display-value nudge → instant saccade (bypasses spring for realism)
-    var sx = (Math.random() - 0.5) * 6;
-    var sy = (Math.random() - 0.5) * 3;
-    dGazeXL += sx; dGazeXR += sx;
-    dGazeYL += sy; dGazeYR += sy;
-    // Post-saccadic oscillation: small counter-twitch at 40ms, spring corrects
+    // Move target slightly — spring physics handles smooth travel
+    var sx = (Math.random() - 0.5) * 3.5;
+    var sy = (Math.random() - 0.5) * 1.8;
+    tGazeXL += sx; tGazeXR += sx;
+    tGazeYL += sy; tGazeYR += sy;
+    // Return to base after a short hold
     setTimeout(function() {
-      if (!isTouching && !isSurprised) {
-        dGazeXL -= sx * 0.3; dGazeXR -= sx * 0.3;
-        dGazeYL -= sy * 0.3; dGazeYR -= sy * 0.3;
+      if (!isTouching && !isSurprised && !isExpressing) {
+        tGazeXL -= sx; tGazeXR -= sx;
+        tGazeYL -= sy; tGazeYR -= sy;
       }
-      setTimeout(function() { microSaccadePending = false; }, 80);
-    }, 40);
+      setTimeout(function() { microSaccadePending = false; }, 200);
+    }, 400 + Math.random() * 300);
     scheduleMicroSaccade();
-  }, 2000 + Math.random() * 3000);
+  }, 3000 + Math.random() * 4000);
 }
 
 // ── Animation loop ───────────────────────────────────────────────
@@ -724,13 +710,6 @@ function loop() {
   pL.setAttribute('rx', dPupRx.toFixed(2));
   pR.setAttribute('rx', dPupRx.toFixed(2));
 
-  // Catchlight opacity — slow fade between states
-  dHlOpacity = lerp(dHlOpacity, tHlOpacity, 0.018);
-  hlL.setAttribute('opacity',  (dHlOpacity * 0.90).toFixed(2));
-  hl2L.setAttribute('opacity', (dHlOpacity * 0.45).toFixed(2));
-  hlR.setAttribute('opacity',  (dHlOpacity * 0.90).toFixed(2));
-  hl2R.setAttribute('opacity', (dHlOpacity * 0.45).toFixed(2));
-
   // Gaze — spring physics, state-dependent stiffness/damping
   var sp = GAZE_SPRING[currentLife.label] || [0.15, 0.80];
   var gs = sp[0], gd = sp[1];
@@ -748,12 +727,6 @@ function loop() {
   pR.setAttribute('cx', pRx.toFixed(1)); pR.setAttribute('cy', pRy.toFixed(1));
   iL.setAttribute('cx', pLx.toFixed(1)); iL.setAttribute('cy', pLy.toFixed(1));
   iR.setAttribute('cx', pRx.toFixed(1)); iR.setAttribute('cy', pRy.toFixed(1));
-
-  // Catchlights track iris: main upper-left, accent lower-right
-  hlL.setAttribute('cx',  (pLx - 3).toFixed(1)); hlL.setAttribute('cy',  (pLy - 8).toFixed(1));
-  hl2L.setAttribute('cx', (pLx + 4).toFixed(1)); hl2L.setAttribute('cy', (pLy + 4).toFixed(1));
-  hlR.setAttribute('cx',  (pRx - 3).toFixed(1)); hlR.setAttribute('cy',  (pRy - 8).toFixed(1));
-  hl2R.setAttribute('cx', (pRx + 4).toFixed(1)); hl2R.setAttribute('cy', (pRy + 4).toFixed(1));
 
   // Gyro + float + tilt
   var gyroDiff = gyroX - dGyroX;
