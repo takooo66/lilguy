@@ -157,6 +157,9 @@ body {
     <g clip-path="url(#cL)">
       <ellipse id="iL" cx="75"  cy="70" rx="22" ry="22" fill="#c4892a"/>
       <ellipse id="pL" cx="75"  cy="70" rx="5" ry="28" fill="#060606"/>
+      <!-- Catchlights — follow pupil, opacity driven by life state -->
+      <ellipse id="hlL"  cx="72"  cy="62" rx="2.5" ry="3" fill="#fff" opacity="0"/>
+      <ellipse id="hl2L" cx="79"  cy="74" rx="1"   ry="1" fill="#fff" opacity="0"/>
       <rect    id="uL" x="18"  y="28"  width="114" height="0" fill="#000"/>
       <rect    id="lL" x="18"  y="102" width="114" height="0" fill="#000"/>
     </g>
@@ -168,6 +171,9 @@ body {
     <g clip-path="url(#cR)">
       <ellipse id="iR" cx="245" cy="70" rx="22" ry="22" fill="#c4892a"/>
       <ellipse id="pR" cx="245" cy="70" rx="5" ry="28" fill="#060606"/>
+      <!-- Catchlights -->
+      <ellipse id="hlR"  cx="242" cy="62" rx="2.5" ry="3" fill="#fff" opacity="0"/>
+      <ellipse id="hl2R" cx="249" cy="74" rx="1"   ry="1" fill="#fff" opacity="0"/>
       <rect    id="uR" x="188" y="28"  width="114" height="0" fill="#000"/>
       <rect    id="lR" x="188" y="102" width="114" height="0" fill="#000"/>
     </g>
@@ -189,7 +195,6 @@ body {
 
 <script>
 // ── Life states mapped to user's actual schedule ─────────────────
-// Eye geometry: y=28 (top) .. y=102 (bottom), total height=74
 // upH  — upper lid height from y=28 downward  (0=open, 74=closed)
 // loH  — lower lid height from y=102 upward   (0=open)
 // pupRy — pupil vertical radius (28=wide, 7=asleep sliver)
@@ -220,6 +225,8 @@ var iL=document.getElementById('iL'), iR=document.getElementById('iR');
 var uL=document.getElementById('uL'), uR=document.getElementById('uR');
 var lL=document.getElementById('lL'), lR=document.getElementById('lR');
 var gL=document.getElementById('gL'), gR=document.getElementById('gR');
+var hlL=document.getElementById('hlL'),   hlR=document.getElementById('hlR');
+var hl2L=document.getElementById('hl2L'), hl2R=document.getElementById('hl2R');
 var cTR=document.getElementById('cTR'), cBR=document.getElementById('cBR');
 var clockEl=document.getElementById('clock');
 
@@ -229,7 +236,7 @@ var dUpHL=0, dUpHR=0, tUpH=0;
 var dLoH=0, tLoH=0;
 // Pupil: rx for dilation, ry for open/closed state
 var dPupRy=28, tPupRy=28;
-var dPupRx=5, tPupRx=5;
+var dPupRx=5,  tPupRx=5;
 // Gaze: independent L/R for two-finger cross-eye mode
 var dGazeXL=0, dGazeYL=0, tGazeXL=0, tGazeYL=0;
 var dGazeXR=0, dGazeYR=0, tGazeXR=0, tGazeYR=0;
@@ -237,19 +244,18 @@ var gazeVelXL=0, gazeVelYL=0, gazeVelXR=0, gazeVelYR=0;
 // Gyro base gaze
 var gyroX=0, gyroY=0, gyroReady=false;
 var dGyroX=0, dGyroY=0, gyroVelX=0;
-// Mouse base gaze (desktop)
+// Mouse base gaze (desktop + lazy touch)
 var mouseGazeX=0, mouseGazeY=0;
-// Cat head tilt
+// Head tilt + post-blink wobble
 var dTilt=0, tTilt=0;
-// Post-blink head wobble (independent channel, fast decay)
 var blinkWobble=0, blinkWobbleTarget=0;
+// Catchlight opacity (fades between states)
+var dHlOpacity=0, tHlOpacity=0;
 
 function startGyro() {
   gyroReady = true;
   document.getElementById('gyroHint').style.display = 'none';
   window.addEventListener('deviceorientation', function(e) {
-    // gamma: 左右傾き → eyeWrap を横に ±40px
-    // beta:  前後傾き → eyeWrap を縦に ±20px
     gyroX = Math.max(-25, Math.min(25, (e.gamma || 0) * 1.2));
   });
 }
@@ -266,10 +272,11 @@ document.addEventListener('touchend', function handler() {
     startGyro();
   }
 }, { once: true });
+
 // State flags
 var isWinkingL=false, isWinkingR=false;
 var isSurprised=false, isLongPressing=false, isTouching=false;
-var isExpressing=false, tapCount=0, tapResetTimer=null;
+var isExpressing=false, tapCount=0, tapResetTimer=null, jitomeTimer=null;
 // Idle doze
 var lastInteractTime=Date.now(), dozeExtra=0;
 // Weather modifier (Tokyo)
@@ -293,20 +300,27 @@ function applyLife(life) {
   var gf = life.glow ? 'url(#glow)' : 'none';
   gL.setAttribute('filter', gf); gR.setAttribute('filter', gf);
   cTR.textContent = life.label;
+  // Catchlight brightness by state
+  tHlOpacity = life.label==='zzz'     ? 0
+             : life.label==='meh'     ? 0.40
+             : life.label==='warming' ? 0.65 : 0.88;
 }
 
 // ── Blink / Wink ─────────────────────────────────────────────────
-// side: undefined=both eyes, 'L'=left only, 'R'=right only
 function blink(side) {
   if (!side) {
     if (isWinkingL || isWinkingR) return;
     isWinkingL = true; isWinkingR = true;
-    dUpHL = 74; dUpHR = 74;
+    // Wind-up: small pre-droop 70ms before snap (biological pre-movement)
+    dUpHL += 7; dUpHR += 7;
     setTimeout(function() {
-      isWinkingL = false; isWinkingR = false;
-      blinkWobbleTarget = (Math.random() - 0.5) * 2.4;
-      setTimeout(function() { blinkWobbleTarget = 0; }, 280);
-    }, 85);
+      dUpHL = 74; dUpHR = 74;
+      setTimeout(function() {
+        isWinkingL = false; isWinkingR = false;
+        blinkWobbleTarget = (Math.random() - 0.5) * 2.4;
+        setTimeout(function() { blinkWobbleTarget = 0; }, 280);
+      }, 85);
+    }, 70);
   } else if (side === 'L') {
     if (isWinkingL) return;
     isWinkingL = true; dUpHL = 74;
@@ -374,7 +388,6 @@ function scheduleHeadTilt() {
 function dozeCheck() {
   if (isTouching || isSurprised) return;
   var idle = Date.now() - lastInteractTime;
-  // 3min(180s) start, 10min(600s) max — up to +22 upH
   dozeExtra = idle > 180000
     ? Math.min(Math.round((idle - 180000) / 420000 * 22), 22)
     : 0;
@@ -385,30 +398,22 @@ function dozeCheck() {
 function applyWeatherMod(code, temp, isDay) {
   var upH = 0, pupRy = 0;
   if (code === 0) {
-    // 快晴 — 昼は明るく目が開く、夜は穏やか
     upH = isDay ? -3 : 0; pupRy = isDay ? -1 : 0;
   } else if (code <= 3) {
-    // 曇り — 少し重い
     upH = 3;
   } else if (code >= 45 && code <= 48) {
-    // 霧 — 半目、瞳孔が開く
     upH = 6; pupRy = 2;
   } else if (code >= 51 && code <= 67) {
-    // 雨 — 猫らしくうんざり、瞼が重い
     upH = 9; pupRy = 1;
   } else if (code >= 71 && code <= 77) {
-    // 雪 — 好奇心旺盛、目が開く
     upH = -5; pupRy = 3;
   } else if (code >= 80 && code <= 82) {
-    // にわか雨
     upH = 5; pupRy = 1;
   } else if (code >= 95) {
-    // 雷雨 — 驚いて目が開く、瞳孔散大
     upH = -6; pupRy = 5;
   }
-  // 気温補正
-  if (temp >= 33)      { upH += 8; }   // 猛暑 → ぐったり
-  else if (temp <= 3)  { upH -= 4; pupRy -= 1; } // 寒さ → キリッ
+  if (temp >= 33)      { upH += 8; }
+  else if (temp <= 3)  { upH -= 4; pupRy -= 1; }
   weatherMod.upHOffset  = upH;
   weatherMod.pupRyOffset = pupRy;
   applyLife(currentLife);
@@ -453,7 +458,7 @@ window.addEventListener('mousemove', function(e) {
 function doSurprise() {
   isSurprised = true;
   dUpHL = 0; dUpHR = 0; tUpH = 0; tLoH = 0; dLoH = 0;
-  tPupRy = 14; tPupRx = 14;  // round & wide — startled
+  tPupRy = 14; tPupRx = 14;
   setTimeout(function() {
     isSurprised = false;
     applyLife(currentLife);
@@ -484,7 +489,7 @@ function doAffection() {
   slowBlink();
   setTimeout(function() {
     tUpH = currentLife.upH; tLoH = currentLife.loH;
-    tPupRy = 12; tPupRx = 5;
+    tPupRy = currentLife.pupRy; tPupRx = 5;
     tGazeYL = 0; tGazeYR = 0; tTilt = 0;
     isExpressing = false;
   }, 2200);
@@ -500,7 +505,7 @@ function doAnger() {
   tTilt = -5;
   setTimeout(function() {
     tUpH = currentLife.upH; tLoH = currentLife.loH;
-    tPupRy = 12; tPupRx = 5;
+    tPupRy = currentLife.pupRy; tPupRx = 5;
     tGazeYL = 0; tGazeYR = 0; tTilt = 0;
     isExpressing = false;
   }, 2000);
@@ -518,6 +523,25 @@ function doIgnore() {
     tUpH = currentLife.upH;
     isExpressing = false;
   }, 2500);
+}
+
+// ジト目 — 長押し1.5秒で散瞳からシフト
+function doJitome() {
+  if (isExpressing) return;
+  isExpressing = true;
+  isLongPressing = false;
+  tUpH = currentLife.upH + 20;
+  tLoH = currentLife.loH + 14;
+  tPupRy = 9; tPupRx = 3;
+  tGazeXL = 5; tGazeXR = 5;
+  tGazeYL = 3; tGazeYR = 3;
+  tTilt = 2;
+  setTimeout(function() {
+    tUpH = currentLife.upH; tLoH = currentLife.loH;
+    tPupRy = currentLife.pupRy; tPupRx = 5;
+    tGazeXL = 0; tGazeXR = 0; tGazeYL = 0; tGazeYR = 0; tTilt = 0;
+    isExpressing = false;
+  }, 3000);
 }
 
 // ── Touch event handlers ─────────────────────────────────────────
@@ -538,10 +562,13 @@ document.body.addEventListener('touchstart', function(e) {
   var g = touchToGaze(t.clientX, t.clientY);
   mouseGazeX = g.x * 0.35; mouseGazeY = g.y * 0.35;
 
-  // Long press (500ms) → pupils dilate (round, like a cat in the dark)
+  // 500ms → 散瞳、さらに1000ms（計1.5s）→ ジト目
   longPressTimer = setTimeout(function() {
     isLongPressing = true;
     tPupRx = 17; tPupRy = 24;
+    jitomeTimer = setTimeout(function() {
+      if (isLongPressing) doJitome();
+    }, 1000);
   }, 500);
 }, { passive:false });
 
@@ -567,6 +594,7 @@ document.body.addEventListener('touchend', function(e) {
   if (e.target.closest('button')) return;
   e.preventDefault();
   clearTimeout(longPressTimer);
+  clearTimeout(jitomeTimer);
 
   var t = e.changedTouches[0];
   var duration = Date.now() - touchStartTime;
@@ -592,10 +620,7 @@ document.body.addEventListener('touchend', function(e) {
       else if (tx > 0.70) doIgnore();
       else                doAffection();
     } else {
-      // Single tap:
-      //   left edge  (<20% width) → left wink
-      //   right edge (>80% width) → right wink
-      //   center area             → look toward tap + blink
+      // Single tap: left edge → left wink, right edge → right wink, center → look+blink
       var sw = window.innerWidth;
       if      (t.clientX < sw * 0.2) blink('L');
       else if (t.clientX > sw * 0.8) blink('R');
@@ -637,37 +662,37 @@ function breathWave(t, period) {
   var phase = (t % period) / period;
   if (phase < 0.30) {
     var p = phase / 0.30;
-    return p * p;            // ease-in: quick inhale
+    return p * p;
   } else if (phase < 0.40) {
-    return 1.0;              // hold at peak
+    return 1.0;
   } else {
     var p = (phase - 0.40) / 0.60;
-    return 1.0 - p * p;     // ease-out: slow exhale
+    return 1.0 - p * p;
   }
 }
 
-// ── Micro-saccades (involuntary eye micro-movements) ─────────────
+// ── Micro-saccades — biometric: instant jump + post-saccadic oscillation ──
 var microSaccadePending = false;
 function scheduleMicroSaccade() {
   setTimeout(function() {
-    if (isTouching || isWinkingL || isSurprised || microSaccadePending) {
+    if (isTouching || isWinkingL || isSurprised || isExpressing || microSaccadePending) {
       scheduleMicroSaccade(); return;
     }
     microSaccadePending = true;
-    var baseXL = tGazeXL, baseXR = tGazeXR;
-    var baseYL = tGazeYL, baseYR = tGazeYR;
-    var sx = (Math.random() - 0.5) * 5;
-    var sy = (Math.random() - 0.5) * 2.5;
-    tGazeXL += sx; tGazeXR += sx;
-    tGazeYL += sy; tGazeYR += sy;
+    // Direct display-value nudge → instant saccade (bypasses spring for realism)
+    var sx = (Math.random() - 0.5) * 6;
+    var sy = (Math.random() - 0.5) * 3;
+    dGazeXL += sx; dGazeXR += sx;
+    dGazeYL += sy; dGazeYR += sy;
+    // Post-saccadic oscillation: small counter-twitch at 40ms, spring corrects
     setTimeout(function() {
       if (!isTouching && !isSurprised) {
-        tGazeXL = baseXL; tGazeXR = baseXR;
-        tGazeYL = baseYL; tGazeYR = baseYR;
+        dGazeXL -= sx * 0.3; dGazeXR -= sx * 0.3;
+        dGazeYL -= sy * 0.3; dGazeYR -= sy * 0.3;
       }
-      microSaccadePending = false;
-      scheduleMicroSaccade();
-    }, 350 + Math.random() * 150);
+      setTimeout(function() { microSaccadePending = false; }, 80);
+    }, 40);
+    scheduleMicroSaccade();
   }, 2000 + Math.random() * 3000);
 }
 
@@ -677,17 +702,34 @@ function loop() {
   if (awakeMode && !isSurprised && !isExpressing && !isWinkingL && !isWinkingR) {
     tUpH = 32; tLoH = 10;
   }
-  // Lids — L/R independent so wink only closes one eye
-  if (!isWinkingL) dUpHL = lerp(dUpHL, tUpH, 0.05);
-  if (!isWinkingR) dUpHR = lerp(dUpHR, tUpH, 0.05);
-  dLoH = lerp(dLoH, tLoH, 0.05);
+
+  // Lids — asymmetric easing: closing fast, opening slow (biologically accurate)
+  var closingSpeed = 0.14, openingSpeed = 0.08;
+  if (!isWinkingL) dUpHL = lerp(dUpHL, tUpH, tUpH > dUpHL ? closingSpeed : openingSpeed);
+  if (!isWinkingR) dUpHR = lerp(dUpHR, tUpH, tUpH > dUpHR ? closingSpeed : openingSpeed);
+  dLoH = lerp(dLoH, tLoH, tLoH > dLoH ? closingSpeed : openingSpeed);
   applyLids();
 
-  // Pupil size (ry=open/state, rx=dilation)
-  dPupRy = lerp(dPupRy, tPupRy, 0.04);
-  dPupRx = lerp(dPupRx, tPupRx, 0.05);
-  pL.setAttribute('ry', dPupRy); pR.setAttribute('ry', dPupRy);
-  pL.setAttribute('rx', dPupRx); pR.setAttribute('rx', dPupRx);
+  // Breath — shared computation used by pupil coupling and transform scale
+  var t = Date.now();
+  var breathPeriod = BREATH[currentLife.label] || 4000;
+  var breathVal    = breathWave(t, breathPeriod);
+  var breathScale  = 0.992 + breathVal * 0.016;
+
+  // Pupil ry: state-driven + subtle breath swell; rx: dilation
+  dPupRy = lerp(dPupRy, tPupRy, 0.08);
+  dPupRx = lerp(dPupRx, tPupRx, 0.10);
+  pL.setAttribute('ry', (dPupRy + breathVal * 0.5).toFixed(2));
+  pR.setAttribute('ry', (dPupRy + breathVal * 0.5).toFixed(2));
+  pL.setAttribute('rx', dPupRx.toFixed(2));
+  pR.setAttribute('rx', dPupRx.toFixed(2));
+
+  // Catchlight opacity — slow fade between states
+  dHlOpacity = lerp(dHlOpacity, tHlOpacity, 0.018);
+  hlL.setAttribute('opacity',  (dHlOpacity * 0.90).toFixed(2));
+  hl2L.setAttribute('opacity', (dHlOpacity * 0.45).toFixed(2));
+  hlR.setAttribute('opacity',  (dHlOpacity * 0.90).toFixed(2));
+  hl2R.setAttribute('opacity', (dHlOpacity * 0.45).toFixed(2));
 
   // Gaze — spring physics, state-dependent stiffness/damping
   var sp = GAZE_SPRING[currentLife.label] || [0.15, 0.80];
@@ -696,27 +738,36 @@ function loop() {
   gazeVelYL += (tGazeYL - dGazeYL) * gs; gazeVelYL *= gd; dGazeYL += gazeVelYL;
   gazeVelXR += (tGazeXR - dGazeXR) * gs; gazeVelXR *= gd; dGazeXR += gazeVelXR;
   gazeVelYR += (tGazeYR - dGazeYR) * gs; gazeVelYR *= gd; dGazeYR += gazeVelYR;
-  pL.setAttribute('cx', 75  + dGazeXL); pL.setAttribute('cy', 70 + dGazeYL);
-  pR.setAttribute('cx', 245 + dGazeXR); pR.setAttribute('cy', 70 + dGazeYR);
-  iL.setAttribute('cx', 75  + dGazeXL); iL.setAttribute('cy', 70 + dGazeYL);
-  iR.setAttribute('cx', 245 + dGazeXR); iR.setAttribute('cy', 70 + dGazeYR);
 
-  // Gyro + float + cat lean/tilt
+  // Convergence: looking down = near object → eyes drift inward slightly
+  var conv = (!isExpressing && !isSurprised) ? Math.max(0, mouseGazeY) * 0.35 : 0;
+
+  var pLx = 75  + dGazeXL + conv, pLy = 70 + dGazeYL;
+  var pRx = 245 + dGazeXR - conv, pRy = 70 + dGazeYR;
+  pL.setAttribute('cx', pLx.toFixed(1)); pL.setAttribute('cy', pLy.toFixed(1));
+  pR.setAttribute('cx', pRx.toFixed(1)); pR.setAttribute('cy', pRy.toFixed(1));
+  iL.setAttribute('cx', pLx.toFixed(1)); iL.setAttribute('cy', pLy.toFixed(1));
+  iR.setAttribute('cx', pRx.toFixed(1)); iR.setAttribute('cy', pRy.toFixed(1));
+
+  // Catchlights track iris: main upper-left, accent lower-right
+  hlL.setAttribute('cx',  (pLx - 3).toFixed(1)); hlL.setAttribute('cy',  (pLy - 8).toFixed(1));
+  hl2L.setAttribute('cx', (pLx + 4).toFixed(1)); hl2L.setAttribute('cy', (pLy + 4).toFixed(1));
+  hlR.setAttribute('cx',  (pRx - 3).toFixed(1)); hlR.setAttribute('cy',  (pRy - 8).toFixed(1));
+  hl2R.setAttribute('cx', (pRx + 4).toFixed(1)); hl2R.setAttribute('cy', (pRy + 4).toFixed(1));
+
+  // Gyro + float + tilt
   var gyroDiff = gyroX - dGyroX;
-  var gyroPull = Math.min(Math.abs(gyroDiff) / 8, 1);  // 8px以下は弱く引く
+  var gyroPull = Math.min(Math.abs(gyroDiff) / 8, 1);
   gyroVelX += gyroDiff * 0.038 * gyroPull;
   gyroVelX *= 0.82;
   dGyroX    += gyroVelX;
   dTilt       = lerp(dTilt, tTilt, 0.015);
   blinkWobble = lerp(blinkWobble, blinkWobbleTarget, 0.09);
-  var t = Date.now();
   var tiltMag = Math.abs(dTilt) / 3.5;
   var floatY  = (Math.sin(t / 2800) * 10 + Math.sin(t / 1700) * 4) * (1 - tiltMag * 0.6);
   var tremor  = (Math.random() - 0.5) * 0.45;
   var dispX   = dGyroX + tremor;
   var lean    = dispX * 0.04;
-  var breathPeriod = BREATH[currentLife.label] || 4000;
-  var breathScale  = 0.992 + breathWave(t, breathPeriod) * 0.016;
   eyeWrap.style.transform =
     'translate(calc(-50% + ' + dispX.toFixed(2) + 'px), calc(-50% + ' + floatY.toFixed(1) + 'px))' +
     ' rotate(' + (lean + dTilt + blinkWobble).toFixed(2) + 'deg)' +
@@ -750,6 +801,7 @@ scheduleBlink();
 scheduleAutoGaze();
 scheduleHeadTilt();
 scheduleMicroSaccade();
+
 // ── Wake button (force half-open lids) ───────────────────────────
 var wakeBtn = document.getElementById('wakeBtn');
 var awakeMode = false;
@@ -788,7 +840,6 @@ async function loadFaceLandmarker(modelMod, fileset, delegate) {
 async function startFaceTracking() {
   camBtn.classList.add('loading');
   try {
-    // 1. camera first (fails fast on permission denial)
     var stream;
     try {
       stream = await navigator.mediaDevices.getUserMedia({
@@ -800,7 +851,6 @@ async function startFaceTracking() {
     camVid.srcObject = stream;
     await camVid.play();
 
-    // 2. load MediaPipe (GPU → CPU fallback)
     if (!faceLandmarker) {
       var mod;
       try {
@@ -831,6 +881,7 @@ async function startFaceTracking() {
     camBtn.classList.remove('loading');
     camBtn.classList.add('on');
     camBtn.textContent = '●';
+    tPupRx = 3.5;  // 対光反射: カメラ起動で縮瞳
     detectLoop();
   } catch (e) {
     camBtn.classList.remove('loading');
@@ -852,6 +903,7 @@ function stopFaceTracking() {
   faceGazeX = 0; faceGazeY = 0;
   camBtn.classList.remove('on');
   camBtn.textContent = '◯';
+  tPupRx = 5;
 }
 
 function detectLoop() {
