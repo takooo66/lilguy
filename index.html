@@ -110,7 +110,7 @@ body {
     <path id="sL" d="M20 70 C35 28,115 28,130 70 C115 102,35 102,20 70Z" fill="#989898" stroke="#000" stroke-width="3"/>
     <g clip-path="url(#cL)">
       <ellipse id="iL" cx="75"  cy="70" rx="22" ry="22" fill="#c4892a"/>
-      <ellipse id="pL" cx="75"  cy="70" rx="10" ry="28" fill="#060606"/>
+      <ellipse id="pL" cx="75"  cy="70" rx="5" ry="28" fill="#060606"/>
       <rect    id="uL" x="18"  y="28"  width="114" height="0" fill="#000"/>
       <rect    id="lL" x="18"  y="102" width="114" height="0" fill="#000"/>
     </g>
@@ -121,7 +121,7 @@ body {
     <path id="sR" d="M190 70 C205 28,285 28,300 70 C285 102,205 102,190 70Z" fill="#989898" stroke="#000" stroke-width="3"/>
     <g clip-path="url(#cR)">
       <ellipse id="iR" cx="245" cy="70" rx="22" ry="22" fill="#c4892a"/>
-      <ellipse id="pR" cx="245" cy="70" rx="10" ry="28" fill="#060606"/>
+      <ellipse id="pR" cx="245" cy="70" rx="5" ry="28" fill="#060606"/>
       <rect    id="uR" x="188" y="28"  width="114" height="0" fill="#000"/>
       <rect    id="lR" x="188" y="102" width="114" height="0" fill="#000"/>
     </g>
@@ -183,7 +183,7 @@ var dUpHL=0, dUpHR=0, tUpH=0;
 var dLoH=0, tLoH=0;
 // Pupil: rx for dilation, ry for open/closed state
 var dPupRy=28, tPupRy=28;
-var dPupRx=10, tPupRx=10;
+var dPupRx=5, tPupRx=5;
 // Gaze: independent L/R for two-finger cross-eye mode
 var dGazeXL=0, dGazeYL=0, tGazeXL=0, tGazeYL=0;
 var dGazeXR=0, dGazeYR=0, tGazeXR=0, tGazeYR=0;
@@ -411,7 +411,7 @@ function doSurprise() {
   setTimeout(function() {
     isSurprised = false;
     applyLife(currentLife);
-    tPupRx = 10;
+    tPupRx = 5;
   }, 900);
 }
 
@@ -438,7 +438,7 @@ function doAffection() {
   slowBlink();
   setTimeout(function() {
     tUpH = currentLife.upH; tLoH = currentLife.loH;
-    tPupRy = 12; tPupRx = 3;
+    tPupRy = 12; tPupRx = 5;
     tGazeYL = 0; tGazeYR = 0; tTilt = 0;
     isExpressing = false;
   }, 2200);
@@ -454,7 +454,7 @@ function doAnger() {
   tTilt = -5;
   setTimeout(function() {
     tUpH = currentLife.upH; tLoH = currentLife.loH;
-    tPupRy = 12; tPupRx = 3;
+    tPupRy = 12; tPupRx = 5;
     tGazeYL = 0; tGazeYR = 0; tTilt = 0;
     isExpressing = false;
   }, 2000);
@@ -528,7 +528,7 @@ document.body.addEventListener('touchend', function(e) {
 
   if (isLongPressing) {
     isLongPressing = false;
-    tPupRx = 10; tPupRy = currentLife.pupRy;
+    tPupRx = 5; tPupRy = currentLife.pupRy;
   } else if (!moved && duration < 300) {
     var now = Date.now();
     tapCount++;
