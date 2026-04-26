@@ -988,23 +988,6 @@ function detectLoop() {
     } catch (e) { /* skip frame */ }
   }
 
-  // Face fallback: nose tip (landmark #1)
-  if (!tracked && faceLandmarker && camVid.readyState >= 2) {
-    try {
-      var fResult = faceLandmarker.detectForVideo(camVid, ts);
-      if (fResult.faceLandmarks && fResult.faceLandmarks.length > 0) {
-        var nose = fResult.faceLandmarks[0][1];
-        var fx = 1 - nose.x;
-        var fy = nose.y;
-        faceGazeX = Math.max(-22, Math.min(22, (fx - 0.5) * 44));
-        faceGazeY = Math.max(-9,  Math.min(9,  (fy - 0.5) * 18));
-        if (!isTouching && !isSurprised && !isExpressing) {
-          tGazeXL = faceGazeX; tGazeXR = faceGazeX;
-          tGazeYL = faceGazeY; tGazeYR = faceGazeY;
-        }
-      }
-    } catch (e) { /* skip frame */ }
-  }
 
   requestAnimationFrame(detectLoop);
 }
