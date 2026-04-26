@@ -750,8 +750,9 @@ function loop() {
   // Pupil ry: state-driven + subtle breath swell; rx: dilation
   dPupRy = lerp(dPupRy, tPupRy, 0.08);
   dPupRx = lerp(dPupRx, tPupRx, 0.10);
-  pL.setAttribute('ry', (dPupRy + breathVal * 0.5).toFixed(2));
-  pR.setAttribute('ry', (dPupRy + breathVal * 0.5).toFixed(2));
+  var clampedPupRy = Math.min(dPupRy + breathVal * 0.5, dIrisRy);
+  pL.setAttribute('ry', clampedPupRy.toFixed(2));
+  pR.setAttribute('ry', clampedPupRy.toFixed(2));
   pL.setAttribute('rx', dPupRx.toFixed(2));
   pR.setAttribute('rx', dPupRx.toFixed(2));
   // Iris ry: animate constriction/dilation (surprise flash, long-press dilation)
