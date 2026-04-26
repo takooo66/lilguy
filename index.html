@@ -728,6 +728,11 @@ function loop() {
     if (petScore > 0.3) { tGazeYL = petScore * 4; tGazeYR = petScore * 4; }
   }
 
+  // Camera tracking: lift lids slightly when actively following (prevents jito-me)
+  if (camActive && camGazeBlend > 0.3 && !isExpressing && !isSurprised && !awakeMode) {
+    tUpH = Math.max(0, tUpH - camGazeBlend * 10);
+  }
+
   // Lids — asymmetric easing: closing fast, opening slow
   // Per-eye lag filter (creates natural L/R phase offset)
   tUpHL_f = lerp(tUpHL_f, tUpH, lidAlphaL);
@@ -862,6 +867,13 @@ var handDetector = null;
 var faceGazeX = 0, faceGazeY = 0;
 var camCanvas = document.createElement('canvas');
 var camCtx = camCanvas.getContext('2d');
+// Cat-like capricious attention state machine
+var camState = 'idle';    // 'idle'|'tracking'|'ignoring'|'bored'
+var camIgnoreUntil = 0;
+var camLastMoveTime = 0;
+var camLastFGX = 0, camLastFGY = 0;
+var camGazeBlend = 0;
+var camNoHandSince = 0;
 
 var camErr = document.getElementById('camErr');
 function showCamErr(msg) {
@@ -921,6 +933,7 @@ function stopFaceTracking() {
     camVid.srcObject = null;
   }
   faceGazeX = 0; faceGazeY = 0;
+  camState = 'idle'; camGazeBlend = 0; camNoHandSince = 0;
   camBtn.classList.remove('on');
   camBtn.textContent = '◯';
   camBtn.style.outline = '';
@@ -936,19 +949,50 @@ async function detectLoop() {
       camCtx.drawImage(camVid, 0, 0, camCanvas.width, camCanvas.height);
       var hands = await handDetector.estimateHands(camCanvas);
       if (hands.length > 0) {
-        var tip = hands[0].keypoints[8];  // index finger tip (2D pixel coords)
-        var vw = camCanvas.width;
-        var vh = camCanvas.height;
-        var hx = 1 - (tip.x / vw);  // mirror for front camera
+        var tip = hands[0].keypoints[8];
+        var vw = camCanvas.width, vh = camCanvas.height;
+        var hx = 1 - (tip.x / vw);
         var hy = tip.y / vh;
         faceGazeX = Math.max(-22, Math.min(22, (hx - 0.5) * 44));
         faceGazeY = Math.max(-9,  Math.min(9,  (hy - 0.5) * 18));
-        if (!isTouching && !isSurprised && !isExpressing) {
-          tGazeXL = faceGazeX; tGazeXR = faceGazeX;
-          tGazeYL = faceGazeY; tGazeYR = faceGazeY;
+        camNoHandSince = 0;
+
+        // ── Cat attention state machine ──
+        var now = Date.now();
+        var moved = Math.abs(faceGazeX - camLastFGX) > 1.5 || Math.abs(faceGazeY - camLastFGY) > 1.5;
+        if (moved) { camLastFGX = faceGazeX; camLastFGY = faceGazeY; camLastMoveTime = now; }
+        var stillMs = now - camLastMoveTime;
+
+        if (camState === 'idle') {
+          camState = 'tracking';
+          camLastMoveTime = now;  // reset still timer on first detection
+        } else if (camState === 'tracking') {
+          if (stillMs > 3000) {
+            camState = 'bored';   // finger stopped → lose interest
+          } else if (Math.random() < 0.0012) {  // ~every 12s at 25fps
+            camState = 'ignoring';
+            camIgnoreUntil = now + 1500 + Math.random() * 2500;
+          }
+        } else if (camState === 'ignoring') {
+          if (now > camIgnoreUntil) camState = 'tracking';
+        } else if (camState === 'bored') {
+          if (moved) camState = 'tracking';  // movement re-engages
         }
-        camBtn.style.outline = '2px solid #0f0';
+
+        // Blend: tracking=1, others=0 (smooth transition)
+        var targetBlend = (camState === 'tracking') ? 1 : 0;
+        camGazeBlend = lerp(camGazeBlend, targetBlend, targetBlend > camGazeBlend ? 0.08 : 0.04);
+
+        if (camGazeBlend > 0.05 && !isTouching && !isSurprised && !isExpressing) {
+          tGazeXL = faceGazeX * camGazeBlend; tGazeXR = faceGazeX * camGazeBlend;
+          tGazeYL = faceGazeY * camGazeBlend; tGazeYR = faceGazeY * camGazeBlend;
+        }
+        camBtn.style.outline = camState === 'tracking' ? '2px solid #0f0' :
+                               camState === 'bored'    ? '2px solid #444' : '2px solid #888';
       } else {
+        if (!camNoHandSince) camNoHandSince = Date.now();
+        if (Date.now() - camNoHandSince > 1500) { camState = 'idle'; camNoHandSince = 0; }
+        camGazeBlend = lerp(camGazeBlend, 0, 0.04);
         camBtn.style.outline = '';
       }
     } catch (e) {
