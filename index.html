@@ -850,11 +850,12 @@ wakeBtn.addEventListener('click', function(e) {
   wakeBtn.textContent = awakeMode ? '○' : 'z';
 });
 
-// ── Camera eye contact (MediaPipe Face Landmarker) ───────────────
+// ── Camera eye contact (MediaPipe Face + Hand Landmarker) ────────
 var camVid = document.getElementById('camVid');
 var camBtn = document.getElementById('camBtn');
 var camActive = false;
 var faceLandmarker = null;
+var handLandmarker = null;
 var faceGazeX = 0, faceGazeY = 0;
 
 var camErr = document.getElementById('camErr');
@@ -872,6 +873,17 @@ async function loadFaceLandmarker(modelMod, fileset, delegate) {
     },
     runningMode: 'VIDEO',
     numFaces: 1
+  });
+}
+
+async function loadHandLandmarker(modelMod, fileset, delegate) {
+  return await modelMod.HandLandmarker.createFromOptions(fileset, {
+    baseOptions: {
+      modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task',
+      delegate: delegate
+    },
+    runningMode: 'VIDEO',
+    numHands: 1
   });
 }
 
@@ -913,6 +925,14 @@ async function startFaceTracking() {
           throw new Error('MODEL: ' + (eCpu.message || eGpu.message || 'failed'));
         }
       }
+      // Load hand model in background (non-blocking — kicks in when ready)
+      loadHandLandmarker(mod, fileset, 'GPU').then(function(h) {
+        handLandmarker = h;
+      }).catch(function() {
+        loadHandLandmarker(mod, fileset, 'CPU').then(function(h) {
+          handLandmarker = h;
+        }).catch(function() {});
+      });
     }
 
     camActive = true;
@@ -946,22 +966,46 @@ function stopFaceTracking() {
 
 function detectLoop() {
   if (!camActive) return;
-  if (faceLandmarker && camVid.readyState >= 2) {
+  var ts = performance.now();
+  var tracked = false;
+
+  // Hand: index finger tip (landmark #8) — preferred
+  if (handLandmarker && camVid.readyState >= 2) {
     try {
-      var result = faceLandmarker.detectForVideo(camVid, performance.now());
-      if (result.faceLandmarks && result.faceLandmarks.length > 0) {
-        var nose = result.faceLandmarks[0][1];  // nose tip
-        var faceX = 1 - nose.x;                 // mirror
-        var faceY = nose.y;
-        faceGazeX = Math.max(-22, Math.min(22, (faceX - 0.5) * 44));
-        faceGazeY = Math.max(-9,  Math.min(9,  (faceY - 0.5) * 18));
+      var hResult = handLandmarker.detectForVideo(camVid, ts);
+      if (hResult.handLandmarks && hResult.handLandmarks.length > 0) {
+        var tip = hResult.handLandmarks[0][8];
+        var hx = 1 - tip.x;  // mirror
+        var hy = tip.y;
+        faceGazeX = Math.max(-22, Math.min(22, (hx - 0.5) * 44));
+        faceGazeY = Math.max(-9,  Math.min(9,  (hy - 0.5) * 18));
+        if (!isTouching && !isSurprised && !isExpressing) {
+          tGazeXL = faceGazeX; tGazeXR = faceGazeX;
+          tGazeYL = faceGazeY; tGazeYR = faceGazeY;
+        }
+        tracked = true;
+      }
+    } catch (e) { /* skip frame */ }
+  }
+
+  // Face fallback: nose tip (landmark #1)
+  if (!tracked && faceLandmarker && camVid.readyState >= 2) {
+    try {
+      var fResult = faceLandmarker.detectForVideo(camVid, ts);
+      if (fResult.faceLandmarks && fResult.faceLandmarks.length > 0) {
+        var nose = fResult.faceLandmarks[0][1];
+        var fx = 1 - nose.x;
+        var fy = nose.y;
+        faceGazeX = Math.max(-22, Math.min(22, (fx - 0.5) * 44));
+        faceGazeY = Math.max(-9,  Math.min(9,  (fy - 0.5) * 18));
         if (!isTouching && !isSurprised && !isExpressing) {
           tGazeXL = faceGazeX; tGazeXR = faceGazeX;
           tGazeYL = faceGazeY; tGazeYR = faceGazeY;
         }
       }
-    } catch (e) { /* skip this frame */ }
+    } catch (e) { /* skip frame */ }
   }
+
   requestAnimationFrame(detectLoop);
 }
 
