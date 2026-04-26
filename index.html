@@ -934,22 +934,11 @@ async function detectLoop() {
       camCtx.drawImage(camVid, 0, 0, camCanvas.width, camCanvas.height);
       var hands = await handDetector.estimateHands(camCanvas);
       if (hands.length > 0) {
-        var kp2d = hands[0].keypoints[8];
-        var kp3d = hands[0].keypoints3D && hands[0].keypoints3D[8];
-        camErr.textContent = '2d:' + JSON.stringify(kp2d).slice(0,40)
-          + ' 3d:' + (kp3d ? JSON.stringify(kp3d).slice(0,40) : 'none');
-        camErr.style.display = 'block';
-        var hx, hy;
-        if (kp2d && kp2d.x != null) {
-          var vw = camVid.videoWidth || 240;
-          var vh = camVid.videoHeight || 320;
-          hx = 1 - (kp2d.x / vw);
-          hy = kp2d.y / vh;
-        } else if (kp3d && kp3d.x != null) {
-          // keypoints3D: x/y in -1..1, x positive = right from model's view
-          hx = 1 - ((kp3d.x + 1) / 2);  // mirror
-          hy = (kp3d.y + 1) / 2;
-        } else { hx = 0.5; hy = 0.5; }
+        var tip = hands[0].keypoints[8];  // index finger tip (2D pixel coords)
+        var vw = camCanvas.width;
+        var vh = camCanvas.height;
+        var hx = 1 - (tip.x / vw);  // mirror for front camera
+        var hy = tip.y / vh;
         faceGazeX = Math.max(-22, Math.min(22, (hx - 0.5) * 44));
         faceGazeY = Math.max(-9,  Math.min(9,  (hy - 0.5) * 18));
         if (!isTouching && !isSurprised && !isExpressing) {
