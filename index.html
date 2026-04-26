@@ -931,8 +931,7 @@ async function detectLoop() {
       if (hands.length > 0) {
         var kp2d = hands[0].keypoints[8];
         var kp3d = hands[0].keypoints3D && hands[0].keypoints3D[8];
-        camErr.textContent = '2d:' + JSON.stringify(kp2d).slice(0,40)
-          + ' 3d:' + JSON.stringify(kp3d).slice(0,40);
+        camErr.textContent = JSON.stringify(hands[0]).slice(0, 200);
         camErr.style.display = 'block';
         var hx, hy;
         if (kp2d && kp2d.x != null) {
