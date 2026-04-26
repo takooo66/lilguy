@@ -959,15 +959,21 @@ function stopFaceTracking() {
 function detectLoop() {
   if (!camActive) return;
   var ts = performance.now();
-  var tracked = false;
 
-  // Hand: index finger tip (landmark #8) — preferred
-  if (handLandmarker && camVid.readyState >= 2) {
+  if (!handLandmarker) {
+    camErr.textContent = 'HAND MODEL loading…';
+    camErr.style.display = 'block';
+    requestAnimationFrame(detectLoop);
+    return;
+  }
+  camErr.style.display = 'none';
+
+  if (camVid.readyState >= 1) {
     try {
       var hResult = handLandmarker.detectForVideo(camVid, ts);
       if (hResult.handLandmarks && hResult.handLandmarks.length > 0) {
         var tip = hResult.handLandmarks[0][8];
-        var hx = 1 - tip.x;  // mirror
+        var hx = 1 - tip.x;
         var hy = tip.y;
         faceGazeX = Math.max(-22, Math.min(22, (hx - 0.5) * 44));
         faceGazeY = Math.max(-9,  Math.min(9,  (hy - 0.5) * 18));
@@ -975,11 +981,14 @@ function detectLoop() {
           tGazeXL = faceGazeX; tGazeXR = faceGazeX;
           tGazeYL = faceGazeY; tGazeYR = faceGazeY;
         }
-        tracked = true;
+        camBtn.style.outline = '2px solid #0f0';  // green = hand detected
+      } else {
+        camBtn.style.outline = '';
       }
-    } catch (e) { /* skip frame */ }
+    } catch (e) {
+      showCamErr('DETECT: ' + (e.message || String(e)));
+    }
   }
-
 
   requestAnimationFrame(detectLoop);
 }
