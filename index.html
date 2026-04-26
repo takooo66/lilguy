@@ -858,6 +858,8 @@ var camBtn = document.getElementById('camBtn');
 var camActive = false;
 var handDetector = null;
 var faceGazeX = 0, faceGazeY = 0;
+var camCanvas = document.createElement('canvas');
+var camCtx = camCanvas.getContext('2d');
 
 var camErr = document.getElementById('camErr');
 function showCamErr(msg) {
@@ -927,11 +929,15 @@ async function detectLoop() {
   if (!camActive) return;
   if (camVid.readyState >= 2 && camVid.videoWidth > 0) {
     try {
-      var hands = await handDetector.estimateHands(camVid);
+      camCanvas.width  = camVid.videoWidth  || 240;
+      camCanvas.height = camVid.videoHeight || 320;
+      camCtx.drawImage(camVid, 0, 0, camCanvas.width, camCanvas.height);
+      var hands = await handDetector.estimateHands(camCanvas);
       if (hands.length > 0) {
         var kp2d = hands[0].keypoints[8];
         var kp3d = hands[0].keypoints3D && hands[0].keypoints3D[8];
-        camErr.textContent = JSON.stringify(hands[0]).slice(0, 200);
+        camErr.textContent = '2d:' + JSON.stringify(kp2d).slice(0,40)
+          + ' 3d:' + (kp3d ? JSON.stringify(kp3d).slice(0,40) : 'none');
         camErr.style.display = 'block';
         var hx, hy;
         if (kp2d && kp2d.x != null) {
