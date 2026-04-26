@@ -966,11 +966,19 @@ function detectLoop() {
   if (!camActive) return;
   var ts = performance.now();
 
-  if (camVid.readyState >= 2 && camVid.videoWidth > 0) {
+  // Debug: always show current state
+  camErr.textContent = 'model:' + (handLandmarker ? 'OK' : 'NG')
+    + ' rs:' + camVid.readyState
+    + ' w:' + camVid.videoWidth;
+  camErr.style.display = 'block';
+
+  if (camVid.readyState >= 1 && camVid.videoWidth > 0) {
     try {
       detCtx.drawImage(camVid, 0, 0, 320, 240);
       var hResult = handLandmarker.detectForVideo(detCanvas, ts);
-      if (hResult.handLandmarks && hResult.handLandmarks.length > 0) {
+      var found = hResult.handLandmarks && hResult.handLandmarks.length > 0;
+      camErr.textContent += found ? ' HAND✓' : ' no hand';
+      if (found) {
         var tip = hResult.handLandmarks[0][8];
         var hx = 1 - tip.x;
         var hy = tip.y;
@@ -980,12 +988,9 @@ function detectLoop() {
           tGazeXL = faceGazeX; tGazeXR = faceGazeX;
           tGazeYL = faceGazeY; tGazeYR = faceGazeY;
         }
-        camBtn.style.outline = '2px solid #0f0';
-      } else {
-        camBtn.style.outline = '';
       }
     } catch (e) {
-      showCamErr('DETECT: ' + (e.message || String(e)));
+      camErr.textContent += ' ERR:' + (e.message || String(e));
     }
   }
 
