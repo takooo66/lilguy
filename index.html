@@ -155,9 +155,9 @@ body {
 
   <!-- Left eye -->
   <g id="gL" transform="rotate(4 75 70)">
-    <path id="sL" d="M20 70 C35 28,115 28,130 70 C115 102,35 102,20 70Z" fill="#b8b8b8" stroke="#000" stroke-width="3.5"/>
+    <path id="sL" d="M20 70 C35 28,115 28,130 70 C115 102,35 102,20 70Z" fill="#b0bab2" stroke="#000" stroke-width="3.5"/>
     <g clip-path="url(#cL)">
-      <ellipse id="iL" cx="75"  cy="70" rx="28" ry="28" fill="#588d5c"/>
+      <ellipse id="iL" cx="75"  cy="70" rx="28" ry="24" fill="#588d5c"/>
       <ellipse id="pL" cx="75"  cy="70" rx="5" ry="28" fill="#000000"/>
       <rect    id="uL" x="18"  y="28"  width="114" height="0" fill="#000"/>
       <rect    id="lL" x="18"  y="102" width="114" height="0" fill="#000"/>
@@ -166,9 +166,9 @@ body {
 
   <!-- Right eye -->
   <g id="gR" transform="rotate(-4 245 70)">
-    <path id="sR" d="M190 70 C205 28,285 28,300 70 C285 102,205 102,190 70Z" fill="#b8b8b8" stroke="#000" stroke-width="3.5"/>
+    <path id="sR" d="M190 70 C205 28,285 28,300 70 C285 102,205 102,190 70Z" fill="#b0bab2" stroke="#000" stroke-width="3.5"/>
     <g clip-path="url(#cR)">
-      <ellipse id="iR" cx="245" cy="70" rx="28" ry="28" fill="#588d5c"/>
+      <ellipse id="iR" cx="245" cy="70" rx="28" ry="24" fill="#588d5c"/>
       <ellipse id="pR" cx="245" cy="70" rx="5" ry="28" fill="#000000"/>
       <rect    id="uR" x="188" y="28"  width="114" height="0" fill="#000"/>
       <rect    id="lR" x="188" y="102" width="114" height="0" fill="#000"/>
@@ -195,11 +195,11 @@ body {
 // loH  — lower lid height from y=102 upward   (0=open)
 // pupRy — pupil vertical radius (28=wide, 7=asleep sliver)
 var LIFE = [
-  { r:[0,4],   label:'still up', upH:18, loH:8,  pupRy:26, fill:'#c8c8c8', glow:true  },
-  { r:[4,12],  label:'zzz',      upH:70, loH:0,  pupRy:7,  fill:'#1a1a1a', glow:false },
-  { r:[12,16], label:'meh',      upH:46, loH:18, pupRy:16, fill:'#5e5e5e', glow:false },
-  { r:[16,21], label:'warming',  upH:24, loH:10, pupRy:22, fill:'#909090', glow:false },
-  { r:[21,24], label:'peak',     upH:14, loH:6,  pupRy:28, fill:'#d4d4d4', glow:true  },
+  { r:[0,4],   label:'still up', upH:18, loH:8,  pupRy:26, fill:'#bccabc', glow:true  },
+  { r:[4,12],  label:'zzz',      upH:70, loH:0,  pupRy:7,  fill:'#181c18', glow:false },
+  { r:[12,16], label:'meh',      upH:46, loH:18, pupRy:16, fill:'#58625a', glow:false },
+  { r:[16,21], label:'warming',  upH:24, loH:10, pupRy:22, fill:'#899590', glow:false },
+  { r:[21,24], label:'peak',     upH:14, loH:6,  pupRy:28, fill:'#c8d4ca', glow:true  },
 ];
 
 var BREATH = { zzz:6000, meh:4500, 'still up':3800, warming:3800, peak:3200 };
@@ -278,7 +278,7 @@ var tUpHL_f=0, tUpHR_f=0, lidAlphaL=0.6, lidAlphaR=0.6;
 // Nystagmus (zzz only)
 var nysOffset=0, nysDir=1, nysSnapping=false, nysTarget=5;
 // Iris size animation
-var dIrisRy=28, tIrisRy=28;
+var dIrisRy=24, tIrisRy=24;
 // Weather modifier (Tokyo)
 var weatherMod = { upHOffset:0, pupRyOffset:0 };
 var eyeWrap=document.getElementById('eyeWrap');
@@ -295,7 +295,7 @@ function applyLife(life) {
   tUpH   = life.upH + dozeExtra + weatherMod.upHOffset;
   tLoH   = life.loH;
   tPupRy = Math.max(5, life.pupRy + weatherMod.pupRyOffset);
-  tIrisRy = 28;
+  tIrisRy = 24;
   sL.setAttribute('fill', life.fill);
   sR.setAttribute('fill', life.fill);
   var gf = life.glow ? 'url(#glow)' : 'none';
@@ -460,9 +460,9 @@ function doSurprise() {
   dUpHL = 0; dUpHR = 0; tUpH = 0; tLoH = 0; dLoH = 0;
   tPupRy = 14; tPupRx = 14;
   // Iris flash: constrict → expand → restore
-  tIrisRy = 16;
-  setTimeout(function() { tIrisRy = 32; }, 180);
-  setTimeout(function() { tIrisRy = 28; }, 600);
+  tIrisRy = 14;
+  setTimeout(function() { tIrisRy = 30; }, 180);
+  setTimeout(function() { tIrisRy = 24; }, 600);
   setTimeout(function() {
     isSurprised = false;
     applyLife(currentLife);
@@ -569,7 +569,8 @@ document.body.addEventListener('touchstart', function(e) {
   // 1200ms → 縦長スリット散瞳（じわじわ1.5秒かけて変化）
   longPressTimer = setTimeout(function() {
     isLongPressing = true;
-    tIrisRy = 22;
+    tLoH = 0;
+    tIrisRy = 20;
     var startRx = dPupRx, startRy = dPupRy;
     var t0 = performance.now();
     (function step() {
@@ -618,7 +619,7 @@ document.body.addEventListener('touchend', function(e) {
   if (isLongPressing) {
     isLongPressing = false;
     tPupRx = 5; tPupRy = currentLife.pupRy;
-    tIrisRy = 28;
+    tIrisRy = 24;
   } else if (!moved && duration < 300) {
     var now = Date.now();
     tapCount++;
