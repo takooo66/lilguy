@@ -718,8 +718,9 @@ function loop() {
   // Convergence: looking down = near object → eyes drift inward slightly
   var conv = (!isExpressing && !isSurprised) ? Math.max(0, mouseGazeY) * 0.35 : 0;
 
-  var pLx = 75  + dGazeXL + conv, pLy = 70 + dGazeYL;
-  var pRx = 245 + dGazeXR - conv, pRy = 70 + dGazeYR;
+  var vorX = Math.max(-5, Math.min(5, -dGyroX * 0.22));
+  var pLx = 75  + dGazeXL + conv + vorX, pLy = 70 + dGazeYL;
+  var pRx = 245 + dGazeXR - conv + vorX, pRy = 70 + dGazeYR;
   pL.setAttribute('cx', pLx.toFixed(1)); pL.setAttribute('cy', pLy.toFixed(1));
   pR.setAttribute('cx', pRx.toFixed(1)); pR.setAttribute('cy', pRy.toFixed(1));
   iL.setAttribute('cx', pLx.toFixed(1)); iL.setAttribute('cy', pLy.toFixed(1));
@@ -736,8 +737,8 @@ function loop() {
   var tiltMag = Math.abs(dTilt) / 3.5;
   var floatY  = (Math.sin(t / 2800) * 10 + Math.sin(t / 1700) * 4) * (1 - tiltMag * 0.6);
   var tremor  = (Math.random() - 0.5) * 0.45;
-  var dispX   = dGyroX + tremor;
-  var lean    = dispX * 0.04;
+  var dispX   = tremor;
+  var lean    = dGyroX * 0.07;
   eyeWrap.style.transform =
     'translate(calc(-50% + ' + dispX.toFixed(2) + 'px), calc(-50% + ' + floatY.toFixed(1) + 'px))' +
     ' rotate(' + (lean + dTilt + blinkWobble).toFixed(2) + 'deg)' +
