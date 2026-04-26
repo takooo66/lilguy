@@ -779,12 +779,8 @@ function loop() {
   var vorX = Math.max(-5, Math.min(5, -dGyroX * 0.22));
   var pLx = 75  + dGazeXL + conv + vorX + nysOffset, pLy = 70 + dGazeYL;
   var pRx = 245 + dGazeXR - conv + vorX + nysOffset, pRy = 70 + dGazeYR;
-  // Fixation tremor — high-freq micro-noise on pupil only (iris stays smooth)
-  var ft = 0.28;
-  var ftLx=(Math.random()-0.5)*ft*2, ftLy=(Math.random()-0.5)*ft*2;
-  var ftRx=(Math.random()-0.5)*ft*2, ftRy=(Math.random()-0.5)*ft*2;
-  pL.setAttribute('cx', (pLx+ftLx).toFixed(2)); pL.setAttribute('cy', (pLy+ftLy).toFixed(2));
-  pR.setAttribute('cx', (pRx+ftRx).toFixed(2)); pR.setAttribute('cy', (pRy+ftRy).toFixed(2));
+  pL.setAttribute('cx', pLx.toFixed(1)); pL.setAttribute('cy', pLy.toFixed(1));
+  pR.setAttribute('cx', pRx.toFixed(1)); pR.setAttribute('cy', pRy.toFixed(1));
   iL.setAttribute('cx', pLx.toFixed(1)); iL.setAttribute('cy', pLy.toFixed(1));
   iR.setAttribute('cx', pRx.toFixed(1)); iR.setAttribute('cy', pRy.toFixed(1));
 
