@@ -552,9 +552,6 @@ document.body.addEventListener('touchstart', function(e) {
   longPressTimer = setTimeout(function() {
     isLongPressing = true;
     tPupRx = 17; tPupRy = 24;
-    jitomeTimer = setTimeout(function() {
-      if (isLongPressing) doJitome();
-    }, 1000);
   }, 500);
 }, { passive:false });
 
@@ -597,7 +594,7 @@ document.body.addEventListener('touchend', function(e) {
     tapResetTimer = setTimeout(function() { tapCount = 0; }, 450);
 
     if (tapCount === 2 && now - lastTapTime < 350) {
-      doSurprise();
+      doJitome();
       tapCount = 0; lastTapTime = 0;
     } else if (tapCount >= 3) {
       tapCount = 0; clearTimeout(tapResetTimer);
