@@ -930,6 +930,9 @@ async function detectLoop() {
       var hands = await handDetector.estimateHands(camVid, { flipHorizontal: true });
       if (hands.length > 0) {
         var tip = hands[0].keypoints[8];  // index finger tip
+        camErr.textContent = 'tip:' + tip.x.toFixed(1) + ',' + tip.y.toFixed(1)
+          + ' vid:' + camVid.videoWidth + 'x' + camVid.videoHeight;
+        camErr.style.display = 'block';
         var hx = tip.x / camVid.videoWidth;
         var hy = tip.y / camVid.videoHeight;
         faceGazeX = Math.max(-22, Math.min(22, (hx - 0.5) * 44));
