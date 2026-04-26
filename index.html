@@ -154,10 +154,10 @@ body {
   </defs>
 
   <!-- Left eye -->
-  <g id="gL" transform="rotate(4 75 70)">
+  <g id="gL" transform="rotate(2 75 70)">
     <path id="sL" d="M20 70 C35 28,115 28,130 70 C115 102,35 102,20 70Z" fill="#b0bab2" stroke="#000" stroke-width="3.5"/>
     <g clip-path="url(#cL)">
-      <ellipse id="iL" cx="75"  cy="70" rx="28" ry="24" fill="#588d5c"/>
+      <ellipse id="iL" cx="75"  cy="70" rx="24" ry="21" fill="#588d5c"/>
       <ellipse id="pL" cx="75"  cy="70" rx="5" ry="28" fill="#000000"/>
       <rect    id="uL" x="18"  y="28"  width="114" height="0" fill="#000"/>
       <rect    id="lL" x="18"  y="102" width="114" height="0" fill="#000"/>
@@ -165,10 +165,10 @@ body {
   </g>
 
   <!-- Right eye -->
-  <g id="gR" transform="rotate(-4 245 70)">
+  <g id="gR" transform="rotate(-2 245 70)">
     <path id="sR" d="M190 70 C205 28,285 28,300 70 C285 102,205 102,190 70Z" fill="#b0bab2" stroke="#000" stroke-width="3.5"/>
     <g clip-path="url(#cR)">
-      <ellipse id="iR" cx="245" cy="70" rx="28" ry="24" fill="#588d5c"/>
+      <ellipse id="iR" cx="245" cy="70" rx="24" ry="21" fill="#588d5c"/>
       <ellipse id="pR" cx="245" cy="70" rx="5" ry="28" fill="#000000"/>
       <rect    id="uR" x="188" y="28"  width="114" height="0" fill="#000"/>
       <rect    id="lR" x="188" y="102" width="114" height="0" fill="#000"/>
@@ -278,7 +278,7 @@ var tUpHL_f=0, tUpHR_f=0, lidAlphaL=0.6, lidAlphaR=0.6;
 // Nystagmus (zzz only)
 var nysOffset=0, nysDir=1, nysSnapping=false, nysTarget=5;
 // Iris size animation
-var dIrisRy=24, tIrisRy=24;
+var dIrisRy=21, tIrisRy=21;
 // Weather modifier (Tokyo)
 var weatherMod = { upHOffset:0, pupRyOffset:0 };
 var eyeWrap=document.getElementById('eyeWrap');
@@ -295,7 +295,7 @@ function applyLife(life) {
   tUpH   = life.upH + dozeExtra + weatherMod.upHOffset;
   tLoH   = life.loH;
   tPupRy = Math.max(5, life.pupRy + weatherMod.pupRyOffset);
-  tIrisRy = 24;
+  tIrisRy = 21;
   sL.setAttribute('fill', life.fill);
   sR.setAttribute('fill', life.fill);
   var gf = life.glow ? 'url(#glow)' : 'none';
@@ -460,9 +460,9 @@ function doSurprise() {
   dUpHL = 0; dUpHR = 0; tUpH = 0; tLoH = 0; dLoH = 0;
   tPupRy = 14; tPupRx = 14;
   // Iris flash: constrict → expand → restore
-  tIrisRy = 14;
-  setTimeout(function() { tIrisRy = 30; }, 180);
-  setTimeout(function() { tIrisRy = 24; }, 600);
+  tIrisRy = 11;
+  setTimeout(function() { tIrisRy = 25; }, 180);
+  setTimeout(function() { tIrisRy = 21; }, 600);
   setTimeout(function() {
     isSurprised = false;
     applyLife(currentLife);
@@ -570,7 +570,7 @@ document.body.addEventListener('touchstart', function(e) {
   longPressTimer = setTimeout(function() {
     isLongPressing = true;
     tLoH = 0;
-    tIrisRy = 20;
+    tIrisRy = 17;
     var startRx = dPupRx, startRy = dPupRy;
     var t0 = performance.now();
     (function step() {
@@ -619,7 +619,7 @@ document.body.addEventListener('touchend', function(e) {
   if (isLongPressing) {
     isLongPressing = false;
     tPupRx = 5; tPupRy = currentLife.pupRy;
-    tIrisRy = 24;
+    tIrisRy = 21;
   } else if (!moved && duration < 300) {
     var now = Date.now();
     tapCount++;
