@@ -953,24 +953,23 @@ function stopFaceTracking() {
   faceGazeX = 0; faceGazeY = 0;
   camBtn.classList.remove('on');
   camBtn.textContent = '◯';
+  camBtn.style.outline = '';
   tPupRx = 5;
 }
+
+// Offscreen canvas for frame extraction (improves iOS Safari compatibility)
+var detCanvas = document.createElement('canvas');
+detCanvas.width = 320; detCanvas.height = 240;
+var detCtx = detCanvas.getContext('2d');
 
 function detectLoop() {
   if (!camActive) return;
   var ts = performance.now();
 
-  if (!handLandmarker) {
-    camErr.textContent = 'HAND MODEL loading…';
-    camErr.style.display = 'block';
-    requestAnimationFrame(detectLoop);
-    return;
-  }
-  camErr.style.display = 'none';
-
-  if (camVid.readyState >= 1) {
+  if (camVid.readyState >= 2 && camVid.videoWidth > 0) {
     try {
-      var hResult = handLandmarker.detectForVideo(camVid, ts);
+      detCtx.drawImage(camVid, 0, 0, 320, 240);
+      var hResult = handLandmarker.detectForVideo(detCanvas, ts);
       if (hResult.handLandmarks && hResult.handLandmarks.length > 0) {
         var tip = hResult.handLandmarks[0][8];
         var hx = 1 - tip.x;
@@ -981,7 +980,7 @@ function detectLoop() {
           tGazeXL = faceGazeX; tGazeXR = faceGazeX;
           tGazeYL = faceGazeY; tGazeYR = faceGazeY;
         }
-        camBtn.style.outline = '2px solid #0f0';  // green = hand detected
+        camBtn.style.outline = '2px solid #0f0';
       } else {
         camBtn.style.outline = '';
       }
