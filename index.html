@@ -202,7 +202,7 @@ var LIFE = [
 
 var BREATH = { zzz:6000, meh:4500, 'still up':3800, warming:3800, peak:3200 };
 // Gaze spring params per state: [stiffness, damping]
-var GAZE_SPRING = { zzz:[0.07,0.88], meh:[0.12,0.84], warming:[0.15,0.80], 'still up':[0.18,0.76], peak:[0.22,0.72] };
+var GAZE_SPRING = { zzz:[0.07,0.88], meh:[0.10,0.80], warming:[0.13,0.75], 'still up':[0.16,0.70], peak:[0.20,0.66] };
 
 function getLife(h) {
   for (var i = 0; i < LIFE.length; i++)
@@ -269,6 +269,14 @@ var isSurprised=false, isLongPressing=false, isTouching=false;
 var isExpressing=false, tapCount=0, tapResetTimer=null, jitomeTimer=null;
 // Idle doze
 var lastInteractTime=Date.now(), dozeExtra=0;
+// Petting accumulation
+var petScore=0, lastPetTime=0;
+// Lid async per-eye filters
+var tUpHL_f=0, tUpHR_f=0, lidAlphaL=0.6, lidAlphaR=0.6;
+// Nystagmus (zzz only)
+var nysOffset=0, nysDir=1, nysSnapping=false, nysTarget=5;
+// Iris size animation
+var dIrisRy=28, tIrisRy=28;
 // Weather modifier (Tokyo)
 var weatherMod = { upHOffset:0, pupRyOffset:0 };
 var eyeWrap=document.getElementById('eyeWrap');
@@ -285,6 +293,7 @@ function applyLife(life) {
   tUpH   = life.upH + dozeExtra + weatherMod.upHOffset;
   tLoH   = life.loH;
   tPupRy = Math.max(5, life.pupRy + weatherMod.pupRyOffset);
+  tIrisRy = 28;
   sL.setAttribute('fill', life.fill);
   sR.setAttribute('fill', life.fill);
   var gf = life.glow ? 'url(#glow)' : 'none';
@@ -297,6 +306,9 @@ function blink(side) {
   if (!side) {
     if (isWinkingL || isWinkingR) return;
     isWinkingL = true; isWinkingR = true;
+    // Randomize per-eye lid filter speed so L/R close/open at slightly different rates
+    lidAlphaL = 0.45 + Math.random() * 0.40;
+    lidAlphaR = 0.45 + Math.random() * 0.40;
     // Wind-up: small pre-droop 70ms before snap (biological pre-movement)
     dUpHL += 7; dUpHR += 7;
     setTimeout(function() {
@@ -445,6 +457,10 @@ function doSurprise() {
   isSurprised = true;
   dUpHL = 0; dUpHR = 0; tUpH = 0; tLoH = 0; dLoH = 0;
   tPupRy = 14; tPupRx = 14;
+  // Iris flash: constrict → expand → restore
+  tIrisRy = 16;
+  setTimeout(function() { tIrisRy = 32; }, 180);
+  setTimeout(function() { tIrisRy = 28; }, 600);
   setTimeout(function() {
     isSurprised = false;
     applyLife(currentLife);
@@ -552,6 +568,7 @@ document.body.addEventListener('touchstart', function(e) {
   longPressTimer = setTimeout(function() {
     isLongPressing = true;
     tPupRx = 17; tPupRy = 24;
+    tIrisRy = 22;
   }, 500);
 }, { passive:false });
 
@@ -570,6 +587,9 @@ document.body.addEventListener('touchmove', function(e) {
   } else {
     var g = touchToGaze(e.touches[0].clientX, e.touches[0].clientY);
     mouseGazeX = g.x * 0.35; mouseGazeY = g.y * 0.35;
+    // Petting: accumulate comfort score on continuous swipe
+    lastPetTime = Date.now();
+    petScore = Math.min(1, petScore + 0.04);
   }
 }, { passive:false });
 
@@ -587,6 +607,7 @@ document.body.addEventListener('touchend', function(e) {
   if (isLongPressing) {
     isLongPressing = false;
     tPupRx = 5; tPupRy = currentLife.pupRy;
+    tIrisRy = 28;
   } else if (!moved && duration < 300) {
     var now = Date.now();
     tapCount++;
@@ -686,10 +707,25 @@ function loop() {
     tUpH = 32; tLoH = 10;
   }
 
-  // Lids — asymmetric easing: closing fast, opening slow (biologically accurate)
+  // Petting — decay score when idle >2s, apply comfort expression
+  var petDecay = (Date.now() - lastPetTime > 2000) ? 0.0003 : 0;
+  petScore = Math.max(0, petScore - petDecay);
+  if (petScore > 0 && !isExpressing && !isSurprised && !awakeMode) {
+    tUpH = currentLife.upH + dozeExtra + weatherMod.upHOffset + petScore * 20;
+    tLoH = currentLife.loH + petScore * 5;
+    if (petScore > 0.3) { tGazeYL = petScore * 4; tGazeYR = petScore * 4; }
+  }
+
+  // Lids — asymmetric easing: closing fast, opening slow
+  // Per-eye lag filter (creates natural L/R phase offset)
+  tUpHL_f = lerp(tUpHL_f, tUpH, lidAlphaL);
+  tUpHR_f = lerp(tUpHR_f, tUpH, lidAlphaR);
   var closingSpeed = 0.14, openingSpeed = 0.08;
-  if (!isWinkingL) dUpHL = lerp(dUpHL, tUpH, tUpH > dUpHL ? closingSpeed : openingSpeed);
-  if (!isWinkingR) dUpHR = lerp(dUpHR, tUpH, tUpH > dUpHR ? closingSpeed : openingSpeed);
+  // Gravity: opening from high positions starts slow (heavy lid), speeds up as it lifts
+  var gravL = (tUpHL_f < dUpHL) ? Math.max(0.4, 1 - dUpHL / 55) : 1;
+  var gravR = (tUpHR_f < dUpHR) ? Math.max(0.4, 1 - dUpHR / 55) : 1;
+  if (!isWinkingL) dUpHL = lerp(dUpHL, tUpHL_f, tUpHL_f > dUpHL ? closingSpeed : openingSpeed * gravL);
+  if (!isWinkingR) dUpHR = lerp(dUpHR, tUpHR_f, tUpHR_f > dUpHR ? closingSpeed : openingSpeed * gravR);
   dLoH = lerp(dLoH, tLoH, tLoH > dLoH ? closingSpeed : openingSpeed);
   applyLids();
 
@@ -706,6 +742,10 @@ function loop() {
   pR.setAttribute('ry', (dPupRy + breathVal * 0.5).toFixed(2));
   pL.setAttribute('rx', dPupRx.toFixed(2));
   pR.setAttribute('rx', dPupRx.toFixed(2));
+  // Iris ry: animate constriction/dilation (surprise flash, long-press dilation)
+  dIrisRy = lerp(dIrisRy, tIrisRy, 0.09);
+  iL.setAttribute('ry', dIrisRy.toFixed(1));
+  iR.setAttribute('ry', dIrisRy.toFixed(1));
 
   // Gaze — spring physics, state-dependent stiffness/damping
   var sp = GAZE_SPRING[currentLife.label] || [0.15, 0.80];
@@ -715,14 +755,36 @@ function loop() {
   gazeVelXR += (tGazeXR - dGazeXR) * gs; gazeVelXR *= gd; dGazeXR += gazeVelXR;
   gazeVelYR += (tGazeYR - dGazeYR) * gs; gazeVelYR *= gd; dGazeYR += gazeVelYR;
 
+  // Nystagmus — zzz only: slow drift → snap back (sleep eye oscillation)
+  if (currentLife.label === 'zzz' && !isExpressing && !isSurprised) {
+    if (!nysSnapping) {
+      nysOffset += nysDir * 0.06;
+      if (Math.abs(nysOffset) >= nysTarget) nysSnapping = true;
+    } else {
+      nysOffset = lerp(nysOffset, 0, 0.20);
+      if (Math.abs(nysOffset) < 0.3) {
+        nysSnapping = false;
+        nysDir = Math.random() > 0.5 ? 1 : -1;
+        nysTarget = 3 + Math.random() * 4;
+        nysOffset = 0;
+      }
+    }
+  } else {
+    nysOffset = lerp(nysOffset, 0, 0.12);
+  }
+
   // Convergence: looking down = near object → eyes drift inward slightly
   var conv = (!isExpressing && !isSurprised) ? Math.max(0, mouseGazeY) * 0.35 : 0;
 
   var vorX = Math.max(-5, Math.min(5, -dGyroX * 0.22));
-  var pLx = 75  + dGazeXL + conv + vorX, pLy = 70 + dGazeYL;
-  var pRx = 245 + dGazeXR - conv + vorX, pRy = 70 + dGazeYR;
-  pL.setAttribute('cx', pLx.toFixed(1)); pL.setAttribute('cy', pLy.toFixed(1));
-  pR.setAttribute('cx', pRx.toFixed(1)); pR.setAttribute('cy', pRy.toFixed(1));
+  var pLx = 75  + dGazeXL + conv + vorX + nysOffset, pLy = 70 + dGazeYL;
+  var pRx = 245 + dGazeXR - conv + vorX + nysOffset, pRy = 70 + dGazeYR;
+  // Fixation tremor — high-freq micro-noise on pupil only (iris stays smooth)
+  var ft = 0.28;
+  var ftLx=(Math.random()-0.5)*ft*2, ftLy=(Math.random()-0.5)*ft*2;
+  var ftRx=(Math.random()-0.5)*ft*2, ftRy=(Math.random()-0.5)*ft*2;
+  pL.setAttribute('cx', (pLx+ftLx).toFixed(2)); pL.setAttribute('cy', (pLy+ftLy).toFixed(2));
+  pR.setAttribute('cx', (pRx+ftRx).toFixed(2)); pR.setAttribute('cy', (pRy+ftRy).toFixed(2));
   iL.setAttribute('cx', pLx.toFixed(1)); iL.setAttribute('cy', pLy.toFixed(1));
   iR.setAttribute('cx', pRx.toFixed(1)); iR.setAttribute('cy', pRy.toFixed(1));
 
