@@ -4,11 +4,11 @@
 
 // upH/loH match HTML values (out of 74 SVG units = full eye height)
 const STATES = [
-  { r:[0,4],   label:'still up', upH:6,  loH:3,  pupRy:26, gray:152, glow:true  },
-  { r:[4,12],  label:'zzz',      upH:68, loH:0,  pupRy:7,  gray: 40, glow:false },
-  { r:[12,16], label:'meh',      upH:36, loH:14, pupRy:16, gray: 88, glow:false },
-  { r:[16,21], label:'warming',  upH:10, loH:4,  pupRy:22, gray:128, glow:false },
-  { r:[21,24], label:'peak',     upH:0,  loH:0,  pupRy:28, gray:176, glow:true  },
+  { r:[0,4],   label:'still up', upH:18, loH:8,  pupRy:26, fill:'#bccabc', glow:true  },
+  { r:[4,12],  label:'zzz',      upH:70, loH:0,  pupRy:7,  fill:'#181c18', glow:false },
+  { r:[12,16], label:'meh',      upH:46, loH:18, pupRy:16, fill:'#58625a', glow:false },
+  { r:[16,21], label:'warming',  upH:24, loH:10, pupRy:22, fill:'#899590', glow:false },
+  { r:[21,24], label:'peak',     upH:14, loH:6,  pupRy:28, fill:'#c8d4ca', glow:true  },
 ]
 
 const SVG_H = 74  // HTML eye height reference
@@ -18,21 +18,19 @@ function getState() {
   return STATES.find(s => h >= s.r[0] && h < s.r[1]) || STATES[0]
 }
 
-function grayColor(g, alpha = 1) {
-  const hex = Math.round(g).toString(16).padStart(2, '0')
-  return new Color(`#${hex}${hex}${hex}`, alpha)
+function hexToColor(hex, alpha = 1) {
+  return new Color(hex, alpha)
 }
 
 function drawEye(ctx, cx, cy, ew, eh, state) {
   const upperLidH = (state.upH / SVG_H) * eh
   const lowerLidH = (state.loH / SVG_H) * eh
   const openH = Math.max(eh - upperLidH - lowerLidH, 0)
-  const gray = state.gray
 
-  // --- glow (behind everything) ---
+  // --- glow (behind everything, green-tinted) ---
   if (state.glow && openH > 2) {
     for (let i = 3; i >= 1; i--) {
-      ctx.setFillColor(grayColor(gray, 0.07 * i))
+      ctx.setFillColor(hexToColor('#588d5c', 0.07 * i))
       const gr = new Path()
       gr.addEllipse(new Rect(cx - ew/2 - i*5, cy - openH/2 - i*4, ew + i*10, openH + i*8))
       ctx.addPath(gr)
@@ -43,28 +41,30 @@ function drawEye(ctx, cx, cy, ew, eh, state) {
   // --- sclera (full ellipse, lids will mask it) ---
   const scleraPath = new Path()
   scleraPath.addEllipse(new Rect(cx - ew/2, cy - eh/2, ew, eh))
-  ctx.setFillColor(grayColor(gray))
+  ctx.setFillColor(hexToColor(state.fill))
   ctx.addPath(scleraPath)
   ctx.fillPath()
 
-  // --- iris (amber, centered at cy — lids mask the overflow) ---
+  // --- iris (green, rx:ry ≈ 24:21, centered at cy) ---
   if (openH > 3) {
-    const irisR = Math.min(ew * 0.33, openH * 0.52)
+    // rx:ry = 24:21 ratio
+    const irisRx = Math.min(ew * 0.33, openH * 0.56)
+    const irisRy = irisRx * (21 / 24)
     const irisPath = new Path()
-    irisPath.addEllipse(new Rect(cx - irisR, cy - irisR, irisR*2, irisR*2))
-    ctx.setFillColor(new Color('#c4892a'))
+    irisPath.addEllipse(new Rect(cx - irisRx, cy - irisRy, irisRx*2, irisRy*2))
+    ctx.setFillColor(hexToColor('#588d5c'))
     ctx.addPath(irisPath)
     ctx.fillPath()
 
-    // pupil (vertical ellipse, scales with pupRy/28)
-    const pupRyScaled = (state.pupRy / 28) * irisR * 0.95
-    const pupRx = ew * 0.085
-    const pupRy = Math.min(pupRyScaled, openH * 0.46)
+    // pupil (vertical slit ellipse, scales with pupRy/28, clamped to irisRy)
+    const pupRyScaled = (state.pupRy / 28) * irisRy * 1.30
+    const pupRx = ew * 0.075
+    const pupRy = Math.min(pupRyScaled, irisRy)
 
     if (pupRy > 0.5) {
       const pupPath = new Path()
       pupPath.addEllipse(new Rect(cx - pupRx, cy - pupRy, pupRx*2, pupRy*2))
-      ctx.setFillColor(new Color('#060606'))
+      ctx.setFillColor(new Color('#000000'))
       ctx.addPath(pupPath)
       ctx.fillPath()
 
@@ -98,7 +98,7 @@ function drawEye(ctx, cx, cy, ew, eh, state) {
 
   // --- sclera black stroke (on top of lids) ---
   ctx.setStrokeColor(Color.black())
-  ctx.setLineWidth(2.5)
+  ctx.setLineWidth(3)
   ctx.addPath(scleraPath)
   ctx.strokePath()
 }
