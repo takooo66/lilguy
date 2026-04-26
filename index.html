@@ -97,6 +97,8 @@ body {
 }
 #eyeWrap svg { width:100%; height:auto; display:block; }
 </style>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/hand-pose-detection@2.0.1/dist/hand-pose-detection.min.js"></script>
 </head>
 <body>
 
@@ -850,12 +852,11 @@ wakeBtn.addEventListener('click', function(e) {
   wakeBtn.textContent = awakeMode ? '○' : 'z';
 });
 
-// ── Camera eye contact (MediaPipe Face + Hand Landmarker) ────────
+// ── Camera finger tracking (TensorFlow.js hand-pose-detection) ────
 var camVid = document.getElementById('camVid');
 var camBtn = document.getElementById('camBtn');
 var camActive = false;
-var faceLandmarker = null;
-var handLandmarker = null;
+var handDetector = null;
 var faceGazeX = 0, faceGazeY = 0;
 
 var camErr = document.getElementById('camErr');
@@ -863,31 +864,6 @@ function showCamErr(msg) {
   camErr.textContent = msg;
   camErr.style.display = 'block';
   setTimeout(function(){ camErr.style.display = 'none'; }, 6000);
-}
-
-async function loadFaceLandmarker(modelMod, fileset, delegate) {
-  return await modelMod.FaceLandmarker.createFromOptions(fileset, {
-    baseOptions: {
-      modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task',
-      delegate: delegate
-    },
-    runningMode: 'VIDEO',
-    numFaces: 1
-  });
-}
-
-async function loadHandLandmarker(modelMod, fileset, delegate) {
-  return await modelMod.HandLandmarker.createFromOptions(fileset, {
-    baseOptions: {
-      modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task',
-      delegate: delegate
-    },
-    runningMode: 'VIDEO',
-    numHands: 1,
-    minHandDetectionConfidence: 0.3,
-    minHandPresenceConfidence: 0.3,
-    minTrackingConfidence: 0.3
-  });
 }
 
 async function startFaceTracking() {
@@ -904,37 +880,25 @@ async function startFaceTracking() {
     camVid.srcObject = stream;
     await camVid.play();
 
-    if (!handLandmarker) {
-      var mod;
+    if (!handDetector) {
       try {
-        mod = await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.9/vision_bundle.mjs');
-      } catch (eImp) {
-        throw new Error('IMPORT: ' + (eImp.message || 'blocked'));
+        await tf.setBackend('webgl');
+        await tf.ready();
+      } catch (e) {
+        await tf.setBackend('cpu');
+        await tf.ready();
       }
-      var fileset;
-      try {
-        fileset = await mod.FilesetResolver.forVisionTasks(
-          'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.9/wasm'
-        );
-      } catch (eFs) {
-        throw new Error('WASM: ' + (eFs.message || 'failed'));
-      }
-      try {
-        handLandmarker = await loadHandLandmarker(mod, fileset, 'GPU');
-      } catch (eGpu) {
-        try {
-          handLandmarker = await loadHandLandmarker(mod, fileset, 'CPU');
-        } catch (eCpu) {
-          throw new Error('MODEL: ' + (eCpu.message || eGpu.message || 'failed'));
-        }
-      }
+      handDetector = await handPoseDetection.createDetector(
+        handPoseDetection.SupportedModels.MediaPipeHands,
+        { runtime: 'tfjs', modelType: 'lite', maxHands: 1 }
+      );
     }
 
     camActive = true;
     camBtn.classList.remove('loading');
     camBtn.classList.add('on');
     camBtn.textContent = '●';
-    tPupRx = 3.5;  // 対光反射: カメラ起動で縮瞳
+    tPupRx = 3.5;
     detectLoop();
   } catch (e) {
     camBtn.classList.remove('loading');
@@ -943,7 +907,6 @@ async function startFaceTracking() {
       camVid.srcObject = null;
     }
     showCamErr(String(e.message || e));
-    console.error('face tracking failed', e);
   }
 }
 
@@ -960,43 +923,30 @@ function stopFaceTracking() {
   tPupRx = 5;
 }
 
-// Offscreen canvas for frame extraction (improves iOS Safari compatibility)
-var detCanvas = document.createElement('canvas');
-detCanvas.width = 320; detCanvas.height = 240;
-var detCtx = detCanvas.getContext('2d');
-
-function detectLoop() {
+async function detectLoop() {
   if (!camActive) return;
-  var ts = performance.now();
-
-  // Debug: always show current state
-  camErr.textContent = 'model:' + (handLandmarker ? 'OK' : 'NG')
-    + ' rs:' + camVid.readyState
-    + ' w:' + camVid.videoWidth;
-  camErr.style.display = 'block';
-
   if (camVid.readyState >= 2 && camVid.videoWidth > 0) {
     try {
-      var hResult = handLandmarker.detectForVideo(camVid, Math.floor(ts));
-      var found = hResult.handLandmarks && hResult.handLandmarks.length > 0;
-      camErr.textContent += found ? ' HAND✓' : ' no hand';
-      if (found) {
-        var tip = hResult.handLandmarks[0][8];
-        var hx = 1 - tip.x;
-        var hy = tip.y;
+      var hands = await handDetector.estimateHands(camVid, { flipHorizontal: true });
+      if (hands.length > 0) {
+        var tip = hands[0].keypoints[8];  // index finger tip
+        var hx = tip.x / camVid.videoWidth;
+        var hy = tip.y / camVid.videoHeight;
         faceGazeX = Math.max(-22, Math.min(22, (hx - 0.5) * 44));
         faceGazeY = Math.max(-9,  Math.min(9,  (hy - 0.5) * 18));
         if (!isTouching && !isSurprised && !isExpressing) {
           tGazeXL = faceGazeX; tGazeXR = faceGazeX;
           tGazeYL = faceGazeY; tGazeYR = faceGazeY;
         }
+        camBtn.style.outline = '2px solid #0f0';
+      } else {
+        camBtn.style.outline = '';
       }
     } catch (e) {
-      camErr.textContent += ' ERR:' + (e.message || String(e));
+      showCamErr('DETECT: ' + (e.message || String(e)));
     }
   }
-
-  requestAnimationFrame(detectLoop);
+  if (camActive) requestAnimationFrame(detectLoop);
 }
 
 camBtn.addEventListener('click', function(e) {
