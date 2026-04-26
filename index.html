@@ -972,10 +972,9 @@ function detectLoop() {
     + ' w:' + camVid.videoWidth;
   camErr.style.display = 'block';
 
-  if (camVid.readyState >= 1 && camVid.videoWidth > 0) {
+  if (camVid.readyState >= 2 && camVid.videoWidth > 0) {
     try {
-      detCtx.drawImage(camVid, 0, 0, 320, 240);
-      var hResult = handLandmarker.detectForVideo(detCanvas, ts);
+      var hResult = handLandmarker.detectForVideo(camVid, Math.floor(ts));
       var found = hResult.handLandmarks && hResult.handLandmarks.length > 0;
       camErr.textContent += found ? ' HAND✓' : ' no hand';
       if (found) {
