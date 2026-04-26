@@ -64,7 +64,7 @@ body {
   padding:0;
   transition:all 0.3s;
 }
-.cam-btn.on { border-color:#c4892a; color:#c4892a; }
+.cam-btn.on { border-color:#fafafa; color:#fafafa; }
 .cam-btn.loading { opacity:0.5; }
 
 .wake-btn {
@@ -85,7 +85,7 @@ body {
   padding:0;
   transition:all 0.3s;
 }
-.wake-btn.on { border-color:#c4892a; color:#c4892a; }
+.wake-btn.on { border-color:#fafafa; color:#fafafa; }
 
 #eyeWrap {
   position:fixed;
@@ -118,7 +118,7 @@ body {
 <video id="camVid" playsinline muted style="display:none"></video>
 <button id="camBtn" class="cam-btn" title="eye contact">◯</button>
 <button id="wakeBtn" class="wake-btn" title="wake up">z</button>
-<div id="camErr" style="position:fixed;top:80px;left:50%;transform:translateX(-50%);z-index:50;font-family:'DM Mono',monospace;font-size:9px;color:#c4892a;text-align:center;max-width:80vw;display:none;pointer-events:none;letter-spacing:1px;"></div>
+<div id="camErr" style="position:fixed;top:80px;left:50%;transform:translateX(-50%);z-index:50;font-family:'DM Mono',monospace;font-size:9px;color:#fafafa;text-align:center;max-width:80vw;display:none;pointer-events:none;letter-spacing:1px;"></div>
 
 <div class="c tl">LIL GUY</div>
 <div class="c tr" id="cTR">—</div>
@@ -154,22 +154,22 @@ body {
   </defs>
 
   <!-- Left eye -->
-  <g id="gL">
-    <path id="sL" d="M20 70 C35 28,115 28,130 70 C115 102,35 102,20 70Z" fill="#989898" stroke="#000" stroke-width="3"/>
+  <g id="gL" transform="rotate(4 75 70)">
+    <path id="sL" d="M20 70 C35 28,115 28,130 70 C115 102,35 102,20 70Z" fill="#b8b8b8" stroke="#000" stroke-width="3.5"/>
     <g clip-path="url(#cL)">
-      <ellipse id="iL" cx="75"  cy="70" rx="22" ry="22" fill="#c4892a"/>
-      <ellipse id="pL" cx="75"  cy="70" rx="5" ry="28" fill="#060606"/>
+      <ellipse id="iL" cx="75"  cy="70" rx="28" ry="28" fill="#588d5c"/>
+      <ellipse id="pL" cx="75"  cy="70" rx="5" ry="28" fill="#000000"/>
       <rect    id="uL" x="18"  y="28"  width="114" height="0" fill="#000"/>
       <rect    id="lL" x="18"  y="102" width="114" height="0" fill="#000"/>
     </g>
   </g>
 
   <!-- Right eye -->
-  <g id="gR">
-    <path id="sR" d="M190 70 C205 28,285 28,300 70 C285 102,205 102,190 70Z" fill="#989898" stroke="#000" stroke-width="3"/>
+  <g id="gR" transform="rotate(-4 245 70)">
+    <path id="sR" d="M190 70 C205 28,285 28,300 70 C285 102,205 102,190 70Z" fill="#b8b8b8" stroke="#000" stroke-width="3.5"/>
     <g clip-path="url(#cR)">
-      <ellipse id="iR" cx="245" cy="70" rx="22" ry="22" fill="#c4892a"/>
-      <ellipse id="pR" cx="245" cy="70" rx="5" ry="28" fill="#060606"/>
+      <ellipse id="iR" cx="245" cy="70" rx="28" ry="28" fill="#588d5c"/>
+      <ellipse id="pR" cx="245" cy="70" rx="5" ry="28" fill="#000000"/>
       <rect    id="uR" x="188" y="28"  width="114" height="0" fill="#000"/>
       <rect    id="lR" x="188" y="102" width="114" height="0" fill="#000"/>
     </g>
@@ -195,11 +195,11 @@ body {
 // loH  — lower lid height from y=102 upward   (0=open)
 // pupRy — pupil vertical radius (28=wide, 7=asleep sliver)
 var LIFE = [
-  { r:[0,4],   label:'still up', upH:6,  loH:3,  pupRy:26, fill:'#989898', glow:true  },
-  { r:[4,12],  label:'zzz',      upH:68, loH:0,  pupRy:7,  fill:'#282828', glow:false },
-  { r:[12,16], label:'meh',      upH:36, loH:14, pupRy:16, fill:'#585858', glow:false },
-  { r:[16,21], label:'warming',  upH:10, loH:4,  pupRy:22, fill:'#808080', glow:false },
-  { r:[21,24], label:'peak',     upH:0,  loH:0,  pupRy:28, fill:'#b0b0b0', glow:true  },
+  { r:[0,4],   label:'still up', upH:18, loH:8,  pupRy:26, fill:'#c8c8c8', glow:true  },
+  { r:[4,12],  label:'zzz',      upH:70, loH:0,  pupRy:7,  fill:'#1a1a1a', glow:false },
+  { r:[12,16], label:'meh',      upH:46, loH:18, pupRy:16, fill:'#5e5e5e', glow:false },
+  { r:[16,21], label:'warming',  upH:24, loH:10, pupRy:22, fill:'#909090', glow:false },
+  { r:[21,24], label:'peak',     upH:14, loH:6,  pupRy:28, fill:'#d4d4d4', glow:true  },
 ];
 
 var BREATH = { zzz:6000, meh:4500, 'still up':3800, warming:3800, peak:3200 };
