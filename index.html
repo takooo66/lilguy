@@ -927,14 +927,16 @@ async function detectLoop() {
   if (!camActive) return;
   if (camVid.readyState >= 2 && camVid.videoWidth > 0) {
     try {
-      var hands = await handDetector.estimateHands(camVid, { flipHorizontal: true });
+      var hands = await handDetector.estimateHands(camVid);
       if (hands.length > 0) {
         var tip = hands[0].keypoints[8];  // index finger tip
-        camErr.textContent = 'tip:' + tip.x.toFixed(1) + ',' + tip.y.toFixed(1)
-          + ' vid:' + camVid.videoWidth + 'x' + camVid.videoHeight;
+        var vw = camVid.videoWidth || 240;
+        var vh = camVid.videoHeight || 320;
+        camErr.textContent = 'kp:' + JSON.stringify(tip).slice(0,60)
+          + ' vid:' + vw + 'x' + vh;
         camErr.style.display = 'block';
-        var hx = tip.x / camVid.videoWidth;
-        var hy = tip.y / camVid.videoHeight;
+        var hx = 1 - (tip.x / vw);  // mirror
+        var hy = tip.y / vh;
         faceGazeX = Math.max(-22, Math.min(22, (hx - 0.5) * 44));
         faceGazeY = Math.max(-9,  Math.min(9,  (hy - 0.5) * 18));
         if (!isTouching && !isSurprised && !isExpressing) {
