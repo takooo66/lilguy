@@ -564,12 +564,21 @@ document.body.addEventListener('touchstart', function(e) {
   var g = touchToGaze(t.clientX, t.clientY);
   mouseGazeX = g.x * 0.35; mouseGazeY = g.y * 0.35;
 
-  // 500ms → 散瞳、さらに1000ms（計1.5s）→ ジト目
+  // 1200ms → 縦長スリット散瞳（じわじわ1.5秒かけて変化）
   longPressTimer = setTimeout(function() {
     isLongPressing = true;
-    tPupRx = 17; tPupRy = 24;
     tIrisRy = 22;
-  }, 500);
+    var startRx = dPupRx, startRy = dPupRy;
+    var t0 = performance.now();
+    (function step() {
+      if (!isLongPressing) return;
+      var p = Math.min(1, (performance.now() - t0) / 1500);
+      var ease = p * p;
+      tPupRx = startRx + (4  - startRx) * ease;
+      tPupRy = startRy + (34 - startRy) * ease;
+      if (p < 1) requestAnimationFrame(step);
+    })();
+  }, 1200);
 }, { passive:false });
 
 document.body.addEventListener('touchmove', function(e) {
