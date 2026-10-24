@@ -891,7 +891,10 @@ async function startFaceTracking() {
         video: { width: 320, height: 240, facingMode: 'user' }, audio: false
       });
     } catch (eCam) {
-      throw new Error('CAMERA: ' + (eCam.name || eCam.message || 'denied'));
+      var camHint = eCam.name === 'NotAllowedError'
+        ? ' — iPhone設定 > ブラウザ > カメラ と サイトのカメラ許可 を確認'
+        : '';
+      throw new Error('CAMERA: ' + (eCam.name || eCam.message || 'denied') + camHint);
     }
     camVid.srcObject = stream;
     await camVid.play();
@@ -1016,7 +1019,8 @@ camBtn.addEventListener('click', function(e) {
     camStarted = true;
     startFaceTracking();
   }
-  document.body.addEventListener('touchstart', autoStartCam, { once: true, passive: true });
+  // touchend (not touchstart) counts as a user gesture in WebKit, which Chrome on iOS uses
+  document.body.addEventListener('touchend',   autoStartCam, { once: true, passive: true });
   document.body.addEventListener('click',      autoStartCam, { once: true });
 })();
 
