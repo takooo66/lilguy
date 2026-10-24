@@ -14,8 +14,9 @@ const STATES = [
 // Geometry is taken 1:1 from index.html's SVG (viewBox 320x140).
 // Eye spans y=28..102 (h=74), center y=70. Iris/pupil are fixed-size and
 // centered; lids are black rects that mask them (same as the HTML).
+// rot matches the HTML's rotate(±2 cx 70) on each eye group.
 const EYE_TOP = 28, EYE_BOT = 102, EYE_CY = 70
-const EYES = [{ x0:20, x1:130, cx:75 }, { x0:190, x1:300, cx:245 }]
+const EYES = [{ x0:20, x1:130, cx:75, rot:2 }, { x0:190, x1:300, cx:245, rot:-2 }]
 const IRIS_RX = 24, IRIS_RY = 21, PUP_RX = 5
 
 function getState() {
@@ -27,9 +28,16 @@ function hexToColor(hex, alpha = 1) {
   return new Color(hex, alpha)
 }
 
-// map SVG coords → canvas coords
-function makeT(scale, ox, oy) {
-  return (x, y) => new Point(ox + x * scale, oy + y * scale)
+// map SVG coords → canvas coords, rotated by deg around (rcx, rcy) like SVG rotate()
+// DrawContext has no transforms, so every shape is built from points through T.
+function makeT(scale, ox, oy, deg = 0, rcx = 0, rcy = 0) {
+  const a = deg * Math.PI / 180, cos = Math.cos(a), sin = Math.sin(a)
+  return (x, y) => {
+    const dx = x - rcx, dy = y - rcy
+    const rx = rcx + dx * cos - dy * sin
+    const ry = rcy + dx * sin + dy * cos
+    return new Point(ox + rx * scale, oy + ry * scale)
+  }
 }
 
 // Almond: M x0 70 C x0+15 28, x1-15 28, x1 70 C x1-15 102, x0+15 102, x0 70 Z
@@ -52,19 +60,25 @@ function almondPath(T, e, grow = 0) {
   return addAlmond(new Path(), T, e, grow)
 }
 
-function fillEllipse(ctx, T, scale, cx, cy, rx, ry, color) {
-  const c = T(cx - rx, cy - ry)
+// ellipse as 4 cubic béziers so it rotates with T
+function fillEllipse(ctx, T, cx, cy, rx, ry, color) {
+  const k = 0.5523, kx = rx * k, ky = ry * k
   const p = new Path()
-  p.addEllipse(new Rect(c.x, c.y, rx * 2 * scale, ry * 2 * scale))
+  p.move(T(cx + rx, cy))
+  p.addCurve(T(cx, cy + ry), T(cx + rx, cy + ky), T(cx + kx, cy + ry))
+  p.addCurve(T(cx - rx, cy), T(cx - kx, cy + ry), T(cx - rx, cy + ky))
+  p.addCurve(T(cx, cy - ry), T(cx - rx, cy - ky), T(cx - kx, cy - ry))
+  p.addCurve(T(cx + rx, cy), T(cx + kx, cy - ry), T(cx + rx, cy - ky))
+  p.closeSubpath()
   ctx.setFillColor(color)
   ctx.addPath(p)
   ctx.fillPath()
 }
 
-function fillSvgRect(ctx, T, scale, x, y, w, h, color) {
-  const c = T(x, y)
+function fillSvgRect(ctx, T, x, y, w, h, color) {
   const p = new Path()
-  p.addRect(new Rect(c.x, c.y, w * scale, h * scale))
+  p.move(T(x, y)); p.addLine(T(x + w, y)); p.addLine(T(x + w, y + h)); p.addLine(T(x, y + h))
+  p.closeSubpath()
   ctx.setFillColor(color)
   ctx.addPath(p)
   ctx.fillPath()
@@ -80,12 +94,12 @@ function drawEye(ctx, T, scale, e, state) {
   ctx.fillPath()
 
   // --- iris + pupil (fixed size, centered like the HTML) ---
-  fillEllipse(ctx, T, scale, e.cx, EYE_CY, IRIS_RX, IRIS_RY, hexToColor('#588d5c'))
-  fillEllipse(ctx, T, scale, e.cx, EYE_CY, PUP_RX, state.pupRy, Color.black())
+  fillEllipse(ctx, T, e.cx, EYE_CY, IRIS_RX, IRIS_RY, hexToColor('#588d5c'))
+  fillEllipse(ctx, T, e.cx, EYE_CY, PUP_RX, state.pupRy, Color.black())
 
   // --- lids ---
-  if (upH > 0) fillSvgRect(ctx, T, scale, e.x0 - 2, EYE_TOP - 2, e.x1 - e.x0 + 4, upH + 2, Color.black())
-  if (loH > 0) fillSvgRect(ctx, T, scale, e.x0 - 2, EYE_BOT - loH, e.x1 - e.x0 + 4, loH + 2, Color.black())
+  if (upH > 0) fillSvgRect(ctx, T, e.x0 - 2, EYE_TOP - 2, e.x1 - e.x0 + 4, upH + 2, Color.black())
+  if (loH > 0) fillSvgRect(ctx, T, e.x0 - 2, EYE_BOT - loH, e.x1 - e.x0 + 4, loH + 2, Color.black())
 
   // --- mask outside the almond (DrawContext has no clip) ---
   const x0 = e.x0, x1 = e.x1
@@ -135,8 +149,10 @@ async function createWidget() {
 
   // fit SVG x=10..310 (eyes + glow margin) into the canvas width
   const scale = cw / 300
-  const T = makeT(scale, -10 * scale, ch / 2 - EYE_CY * scale)
-  for (const e of EYES) drawEye(ctx, T, scale, e, state)
+  for (const e of EYES) {
+    const T = makeT(scale, -10 * scale, ch / 2 - EYE_CY * scale, e.rot, e.cx, EYE_CY)
+    drawEye(ctx, T, scale, e, state)
+  }
 
   const img = ctx.getImage()
   const stack = w.addStack()
