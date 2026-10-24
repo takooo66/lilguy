@@ -11,7 +11,12 @@ const STATES = [
   { r:[21,24], label:'peak',     upH:14, loH:6,  pupRy:28, fill:'#c8d4ca', glow:true  },
 ]
 
-const SVG_H = 74  // HTML eye height reference
+// Geometry is taken 1:1 from index.html's SVG (viewBox 320x140).
+// Eye spans y=28..102 (h=74), center y=70. Iris/pupil are fixed-size and
+// centered; lids are black rects that mask them (same as the HTML).
+const EYE_TOP = 28, EYE_BOT = 102, EYE_CY = 70
+const EYES = [{ x0:20, x1:130, cx:75 }, { x0:190, x1:300, cx:245 }]
+const IRIS_RX = 24, IRIS_RY = 21, PUP_RX = 5
 
 function getState() {
   const h = new Date().getHours()
@@ -22,85 +27,96 @@ function hexToColor(hex, alpha = 1) {
   return new Color(hex, alpha)
 }
 
-function drawEye(ctx, cx, cy, ew, eh, state) {
-  const upperLidH = (state.upH / SVG_H) * eh
-  const lowerLidH = (state.loH / SVG_H) * eh
-  const openH = Math.max(eh - upperLidH - lowerLidH, 0)
+// map SVG coords → canvas coords
+function makeT(scale, ox, oy) {
+  return (x, y) => new Point(ox + x * scale, oy + y * scale)
+}
 
-  // --- glow (behind everything, green-tinted) ---
-  if (state.glow && openH > 2) {
-    for (let i = 3; i >= 1; i--) {
-      ctx.setFillColor(hexToColor('#588d5c', 0.07 * i))
-      const gr = new Path()
-      gr.addEllipse(new Rect(cx - ew/2 - i*5, cy - openH/2 - i*4, ew + i*10, openH + i*8))
-      ctx.addPath(gr)
-      ctx.fillPath()
-    }
+// Almond: M x0 70 C x0+15 28, x1-15 28, x1 70 C x1-15 102, x0+15 102, x0 70 Z
+function addAlmond(p, T, e, grow = 0, reverse = false) {
+  const x0 = e.x0 - grow, x1 = e.x1 + grow
+  const top = EYE_TOP - grow, bot = EYE_BOT + grow
+  p.move(T(x0, EYE_CY))
+  if (!reverse) {
+    p.addCurve(T(x1, EYE_CY), T(x0 + 15, top), T(x1 - 15, top))
+    p.addCurve(T(x0, EYE_CY), T(x1 - 15, bot), T(x0 + 15, bot))
+  } else {
+    p.addCurve(T(x1, EYE_CY), T(x0 + 15, bot), T(x1 - 15, bot))
+    p.addCurve(T(x0, EYE_CY), T(x1 - 15, top), T(x0 + 15, top))
   }
+  p.closeSubpath()
+  return p
+}
 
-  // --- sclera (full ellipse, lids will mask it) ---
-  const scleraPath = new Path()
-  scleraPath.addEllipse(new Rect(cx - ew/2, cy - eh/2, ew, eh))
+function almondPath(T, e, grow = 0) {
+  return addAlmond(new Path(), T, e, grow)
+}
+
+function fillEllipse(ctx, T, scale, cx, cy, rx, ry, color) {
+  const c = T(cx - rx, cy - ry)
+  const p = new Path()
+  p.addEllipse(new Rect(c.x, c.y, rx * 2 * scale, ry * 2 * scale))
+  ctx.setFillColor(color)
+  ctx.addPath(p)
+  ctx.fillPath()
+}
+
+function fillSvgRect(ctx, T, scale, x, y, w, h, color) {
+  const c = T(x, y)
+  const p = new Path()
+  p.addRect(new Rect(c.x, c.y, w * scale, h * scale))
+  ctx.setFillColor(color)
+  ctx.addPath(p)
+  ctx.fillPath()
+}
+
+function drawEye(ctx, T, scale, e, state) {
+  const upH = Math.min(state.upH, 74)
+  const loH = Math.min(state.loH, 74 - upH)
+
+  // --- sclera ---
   ctx.setFillColor(hexToColor(state.fill))
-  ctx.addPath(scleraPath)
+  ctx.addPath(almondPath(T, e))
   ctx.fillPath()
 
-  // --- iris (green, rx:ry ≈ 24:21, centered at cy) ---
-  if (openH > 3) {
-    // rx:ry = 24:21 ratio
-    const irisRx = Math.min(ew * 0.33, openH * 0.56)
-    const irisRy = irisRx * (21 / 24)
-    const irisPath = new Path()
-    irisPath.addEllipse(new Rect(cx - irisRx, cy - irisRy, irisRx*2, irisRy*2))
-    ctx.setFillColor(hexToColor('#588d5c'))
-    ctx.addPath(irisPath)
-    ctx.fillPath()
+  // --- iris + pupil (fixed size, centered like the HTML) ---
+  fillEllipse(ctx, T, scale, e.cx, EYE_CY, IRIS_RX, IRIS_RY, hexToColor('#588d5c'))
+  fillEllipse(ctx, T, scale, e.cx, EYE_CY, PUP_RX, state.pupRy, Color.black())
 
-    // pupil (vertical slit ellipse, scales with pupRy/28, clamped to irisRy)
-    const pupRyScaled = (state.pupRy / 28) * irisRy * 1.30
-    const pupRx = ew * 0.075
-    const pupRy = Math.min(pupRyScaled, irisRy)
+  // --- lids ---
+  if (upH > 0) fillSvgRect(ctx, T, scale, e.x0 - 2, EYE_TOP - 2, e.x1 - e.x0 + 4, upH + 2, Color.black())
+  if (loH > 0) fillSvgRect(ctx, T, scale, e.x0 - 2, EYE_BOT - loH, e.x1 - e.x0 + 4, loH + 2, Color.black())
 
-    if (pupRy > 0.5) {
-      const pupPath = new Path()
-      pupPath.addEllipse(new Rect(cx - pupRx, cy - pupRy, pupRx*2, pupRy*2))
-      ctx.setFillColor(new Color('#000000'))
-      ctx.addPath(pupPath)
-      ctx.fillPath()
+  // --- mask outside the almond (DrawContext has no clip) ---
+  const x0 = e.x0, x1 = e.x1
+  const top = new Path()
+  top.move(T(x0 - 2, EYE_TOP - 30)); top.addLine(T(x0 - 2, EYE_CY)); top.addLine(T(x0, EYE_CY))
+  top.addCurve(T(x1, EYE_CY), T(x0 + 15, EYE_TOP), T(x1 - 15, EYE_TOP))
+  top.addLine(T(x1 + 2, EYE_CY)); top.addLine(T(x1 + 2, EYE_TOP - 30)); top.closeSubpath()
+  const bot = new Path()
+  bot.move(T(x0 - 2, EYE_BOT + 30)); bot.addLine(T(x0 - 2, EYE_CY)); bot.addLine(T(x0, EYE_CY))
+  bot.addCurve(T(x1, EYE_CY), T(x0 + 15, EYE_BOT), T(x1 - 15, EYE_BOT))
+  bot.addLine(T(x1 + 2, EYE_CY)); bot.addLine(T(x1 + 2, EYE_BOT + 30)); bot.closeSubpath()
+  ctx.setFillColor(Color.black())
+  ctx.addPath(top); ctx.fillPath()
+  ctx.addPath(bot); ctx.fillPath()
 
-      // highlight
-      const hx = pupRx * 0.38, hy = pupRy * 0.28
-      const hiPath = new Path()
-      hiPath.addEllipse(new Rect(cx - pupRx*0.3 - hx/2, cy - pupRy*0.6 - hy/2, hx, hy))
-      ctx.setFillColor(new Color('#ffffff', 0.55))
-      ctx.addPath(hiPath)
+  // --- sclera black stroke ---
+  ctx.setStrokeColor(Color.black())
+  ctx.setLineWidth(3.5 * scale)
+  ctx.addPath(almondPath(T, e))
+  ctx.strokePath()
+
+  // --- glow: rings outside the almond (reverse-wound inner edge = hole) ---
+  if (state.glow) {
+    for (let i = 1; i <= 3; i++) {
+      const ring = almondPath(T, e, 1.75 + i * 3)
+      addAlmond(ring, T, e, 1.75, true)
+      ctx.setFillColor(hexToColor('#588d5c', 0.12))
+      ctx.addPath(ring)
       ctx.fillPath()
     }
   }
-
-  // --- upper lid (black rect from top, masks iris/pupil) ---
-  if (upperLidH > 0) {
-    const uLidPath = new Path()
-    uLidPath.addRect(new Rect(cx - ew/2 - 2, cy - eh/2 - 1, ew + 4, upperLidH + 1))
-    ctx.setFillColor(Color.black())
-    ctx.addPath(uLidPath)
-    ctx.fillPath()
-  }
-
-  // --- lower lid ---
-  if (lowerLidH > 0) {
-    const lLidPath = new Path()
-    lLidPath.addRect(new Rect(cx - ew/2 - 2, cy + eh/2 - lowerLidH, ew + 4, lowerLidH + 1))
-    ctx.setFillColor(Color.black())
-    ctx.addPath(lLidPath)
-    ctx.fillPath()
-  }
-
-  // --- sclera black stroke (on top of lids) ---
-  ctx.setStrokeColor(Color.black())
-  ctx.setLineWidth(3)
-  ctx.addPath(scleraPath)
-  ctx.strokePath()
 }
 
 async function createWidget() {
@@ -117,14 +133,10 @@ async function createWidget() {
   ctx.opaque = false
   ctx.respectScreenScale = true
 
-  const eyeW = 56, eyeH = 36
-  const gap = 18
-  const lx = cw/2 - gap/2 - eyeW/2
-  const rx = cw/2 + gap/2 + eyeW/2
-  const ey = ch/2
-
-  drawEye(ctx, lx, ey, eyeW, eyeH, state)
-  drawEye(ctx, rx, ey, eyeW, eyeH, state)
+  // fit SVG x=10..310 (eyes + glow margin) into the canvas width
+  const scale = cw / 300
+  const T = makeT(scale, -10 * scale, ch / 2 - EYE_CY * scale)
+  for (const e of EYES) drawEye(ctx, T, scale, e, state)
 
   const img = ctx.getImage()
   const stack = w.addStack()
